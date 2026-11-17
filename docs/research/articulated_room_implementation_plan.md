@@ -1,6 +1,6 @@
 # Implementation Plan: Procedurally Generated Rooms with Articulated Furniture
 
-**Target repo:** `genesis_adaptor` (`unienv_genesis_collection/`, `unienv_genesis/`, `scripts/`)
+**Target repo:** `unienv-genesis` (`unienv_genesis_collection/`, `unienv_genesis/`, `scripts/`)
 **Asset sources:** RoboCasa (CC BY 4.0, MJCF) · ReplicaCAD (CC BY 4.0, URDF+GLB)
 **Genesis version pinned:** 1.1.2 — all APIs below were verified against the installed package, not guessed.
 

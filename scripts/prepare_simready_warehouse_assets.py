@@ -152,7 +152,7 @@ authoritative license statement — consumers should verify it and attribute
 "Physical AI SimReady Warehouse Dataset, © NVIDIA Corporation, CC BY 4.0"
 when using these models.
 
-Repackaged by genesis_adaptor/scripts/prepare_simready_warehouse_assets.py.
+Repackaged by unienv-genesis/scripts/prepare_simready_warehouse_assets.py.
 """
 
 PROVENANCE_README = """\

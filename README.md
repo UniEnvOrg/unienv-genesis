@@ -4,7 +4,7 @@ This repository contains the implementation of the adaptor that connects the Gen
 
 ## Node System
 
-mjlab (MuJoCo's Python interface) and IsaacLab (NVIDIA's GPU-accelerated RL framework for Omniverse) both share a common idea: a simulation environment should be assembled from **independent, reusable building blocks** — robots, sensors, scene elements — each responsible for its own lifecycle. `genesis_adaptor` mirrors this philosophy for the Genesis engine, providing:
+mjlab (MuJoCo's Python interface) and IsaacLab (NVIDIA's GPU-accelerated RL framework for Omniverse) both share a common idea: a simulation environment should be assembled from **independent, reusable building blocks** — robots, sensors, scene elements — each responsible for its own lifecycle. `unienv-genesis` mirrors this philosophy for the Genesis engine, providing:
 
 - A **node-based scene description** system that lets you compose robots, sensors, and scene geometry declaratively.
 - A **priority-ordered lifecycle** that guarantees correct initialisation order without manual dependency management.
@@ -129,7 +129,7 @@ pip install unienv_genesis
 Or install the adaptor locally from source:
 
 ```bash
-git clone https://github.com/UniEnvOrg/genesis_adaptor/
-cd genesis_adaptor
+git clone https://github.com/UniEnvOrg/unienv-genesis/
+cd unienv-genesis
 pip install -e .
 ```

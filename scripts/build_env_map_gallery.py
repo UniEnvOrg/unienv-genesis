@@ -51,7 +51,7 @@ from typing import Dict, Iterable, List, Optional
 # Paths and constants
 # ---------------------------------------------------------------------------
 
-# This script lives at ``genesis_adaptor/scripts/``; the collection's asset
+# This script lives at ``unienv-genesis/scripts/``; the collection's asset
 # tree is one directory up under ``unienv_genesis_collection/assets/``.
 _THIS_DIR = Path(__file__).resolve().parent
 _COLLECTION_DIR = _THIS_DIR.parent / "unienv_genesis_collection"

@@ -270,7 +270,7 @@ redistributing these assets (the packaged object ids carry the
 
 NON-COMMERCIAL USE ONLY — see docs/articulated_rooms.md for the caveat.
 
-Repackaged by genesis_adaptor/scripts/prepare_lightwheel_assets.py.
+Repackaged by unienv-genesis/scripts/prepare_lightwheel_assets.py.
 
 ---
 Attribution-NonCommercial 4.0 International

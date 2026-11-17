@@ -166,7 +166,7 @@ Amazon Berkeley Objects (c) by Amazon.com — the 3D models, catalog imagery and
 listings metadata of the
 [Amazon Berkeley Objects dataset](https://amazon-berkeley-objects.s3.us-east-1.amazonaws.com/index.html)
 (7,953 modelled household products with materials), repackaged by
-`genesis_adaptor/scripts/prepare_abo_assets.py` for use as rigid manipulable
+`unienv-genesis/scripts/prepare_abo_assets.py` for use as rigid manipulable
 objects.
 
 ## License

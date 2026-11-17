@@ -154,7 +154,7 @@ variations from the Replica dataset): the **articulated furniture** URDFs
 (fridge, cabinets, drawers, doors) with their GLB visual meshes, plus the
 **stage shells** (apartment / staging-room GLBs) and the `scene_instance.json`
 arrangement files, ingested by
-`genesis_adaptor/scripts/prepare_replicacad_assets.py`.
+`unienv-genesis/scripts/prepare_replicacad_assets.py`.
 
 > **License note.** The upstream dataset is inconsistent about its license:
 > its Hugging Face dataset card (front matter and prose) declares **CC BY 4.0**,

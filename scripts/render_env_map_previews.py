@@ -81,7 +81,7 @@ from typing import Dict, List, Optional, Tuple
 # ---------------------------------------------------------------------------
 
 # Resolve the env_maps asset directory relative to this script.  This script
-# lives at ``genesis_adaptor/scripts/`` so the collection's assets are two
+# lives at ``unienv-genesis/scripts/`` so the collection's assets are two
 # directories up under ``unienv_genesis_collection/assets/``.
 _THIS_DIR = Path(__file__).resolve().parent
 _COLLECTION_DIR = _THIS_DIR.parent / "unienv_genesis_collection"

@@ -58,7 +58,7 @@ masses baked into the URDFs.
 
 Reorganized to one self-contained directory per object (URDF/MJCF mesh paths
 rewritten to be directory-local) by
-`genesis_adaptor/scripts/prepare_ycb_assets.py`.
+`unienv-genesis/scripts/prepare_ycb_assets.py`.
 
 When using these models, please cite the YCB benchmark:
 

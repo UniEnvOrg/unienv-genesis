@@ -162,7 +162,7 @@ AI (Ai2)), licensed under CC BY 4.0."  The dataset is intended for research
 and educational use in accordance with Ai2's Responsible Use Guidelines
 (https://allenai.org/responsible-use).
 
-Repackaged by genesis_adaptor/scripts/prepare_molmospaces_assets.py.
+Repackaged by unienv-genesis/scripts/prepare_molmospaces_assets.py.
 """
 
 PROVENANCE_README = """\

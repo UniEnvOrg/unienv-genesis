@@ -291,7 +291,7 @@ license statement — consumers should verify it and attribute
 All categories (including `Ikea_furniture` and `Medical_equipment`) are
 packaged under the upstream Apache-2.0 dataset-card license.
 
-Repackaged by genesis_adaptor/scripts/prepare_artvip_assets.py.
+Repackaged by unienv-genesis/scripts/prepare_artvip_assets.py.
 """
 
 PROVENANCE_README = """\

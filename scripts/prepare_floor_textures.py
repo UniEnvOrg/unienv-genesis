@@ -110,7 +110,7 @@ PROVENANCE_README = """\
 # Floor textures
 
 Downloaded from [Poly Haven](https://polyhaven.com/textures) (CC0 / public
-domain) by `genesis_adaptor/scripts/prepare_floor_textures.py`.
+domain) by `unienv-genesis/scripts/prepare_floor_textures.py`.
 
 ## Layout
 

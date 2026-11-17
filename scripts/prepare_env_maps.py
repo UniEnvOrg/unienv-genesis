@@ -78,7 +78,7 @@ PROVENANCE_README = """\
 # Environment maps (HDRIs)
 
 Downloaded from [Poly Haven](https://polyhaven.com/hdris) (CC0 / public domain)
-by `genesis_adaptor/scripts/prepare_env_maps.py`.
+by `unienv-genesis/scripts/prepare_env_maps.py`.
 
 ## Attribution
 

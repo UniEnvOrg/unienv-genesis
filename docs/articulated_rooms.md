@@ -1,6 +1,6 @@
 # Articulated furniture & rooms
 
-`genesis_adaptor` can build **rooms furnished with fixed articulated furniture**
+`unienv-genesis` can build **rooms furnished with fixed articulated furniture**
 (kitchen cabinets, drawers, doors, appliances) and drive a **single named joint
 of one furniture instance** — the "open the top drawer of cabinet X" family of
 manipulation objectives — with the same node/priority lifecycle as every other

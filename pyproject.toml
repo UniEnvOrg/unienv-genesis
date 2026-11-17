@@ -36,11 +36,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/UniEnvOrg/genesis_adaptor"
-Documentation = "https://github.com/UniEnvOrg/genesis_adaptor"
-Repository = "https://github.com/UniEnvOrg/genesis_adaptor"
-Issues = "https://github.com/UniEnvOrg/genesis_adaptor/issues"
-Changelog = "https://github.com/UniEnvOrg/genesis_adaptor/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/UniEnvOrg/unienv-genesis"
+Documentation = "https://github.com/UniEnvOrg/unienv-genesis"
+Repository = "https://github.com/UniEnvOrg/unienv-genesis"
+Issues = "https://github.com/UniEnvOrg/unienv-genesis/issues"
+Changelog = "https://github.com/UniEnvOrg/unienv-genesis/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 # Only the three intended package roots may be packaged. A broad include
