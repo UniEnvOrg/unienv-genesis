@@ -227,7 +227,7 @@ class EndEffectorPoseController(
                 rotation_representation,
                 normalized=normalize_rotation_action,
                 frame=self.eef_frame,
-                link=self._target_link_name,
+                **self.eef_pose_metadata,
             ),
         )
         # EEF observation keys (eef_position, eef_quaternion) are already added
@@ -239,12 +239,20 @@ class EndEffectorPoseController(
             shape=get_batch_aware_shape(batch_size, 6),
             dtype=world.dtype,
             device=world.device,
+            # Both parts are expressed in ``eef_frame`` (see solve_ik_base). The
+            # error is that of the physical ``link`` the IK solves for, not of
+            # the virtual EEF offset frame: the position part is of the link
+            # origin (the rotation part is the same for both).
             metadata=metadata(
                 "state",
                 units=["m", "m", "m", "rad", "rad", "rad"],
                 names=["pos_err_x", "pos_err_y", "pos_err_z", "rot_err_x", "rot_err_y", "rot_err_z"],
                 frame=self.eef_frame,
-                label="IK pose error of the last commanded EEF pose",
+                label=(
+                    "IK pose error of the last commanded EEF pose: target - achieved position of the link "
+                    "origin, and the rotation vector of target * achieved^-1"
+                ),
+                **{k: v for k, v in self.eef_pose_metadata.items() if not k.startswith("eef_offset_")},
             ),
         )
         self._last_ik_result = {}
@@ -348,7 +356,14 @@ class EndEffectorPoseController(
             target_quaternion: (batch_size, 4) tensor of target end-effector rotations in quaternion format in the end-effector's base frame
         Returns:
             target_joint_positions: (batch_size, n_dof) tensor of target joint positions
-            achieved_error: (batch_size, 6) tensor of end-effector pose error (position error + rotation error), where position error = target_position - achieved_position, rotation error = quat_to_rotvec(achieved_quaternion^{-1} * target_quaternion)
+            achieved_error: (batch_size, 6) tensor of the pose error (position error + rotation error) of the
+                IK's ``target_link`` (the physical link, not the virtual EEF offset frame), both parts
+                expressed in the base frame (the world frame without one). Genesis computes them in the
+                world frame as position error = target_link_position - achieved_link_position and
+                rotation error = quat_to_rotvec(target_quaternion * achieved_quaternion^{-1}) (the
+                rotation still to apply, about world axes); both vectors are rotated into the base
+                frame by the inverse base rotation. The rotation error is the same for the link and
+                the virtual EEF frame; the position error is the link origin's.
         """
         target_position_absolute, target_quaternion_absolute = self.convert_base_to_absolute(target_position, target_quaternion)
         target_joint_positions, achieved_error_absolute = self.solve_ik_absolute(target_position_absolute, target_quaternion_absolute)
@@ -358,8 +373,10 @@ class EndEffectorPoseController(
             achieved_error = achieved_error_absolute
         else:
             _, base_quaternion = base_transform
-            achieved_position_error = quaternion_apply(quaternion_invert(base_quaternion), achieved_error_absolute[..., :3])
-            achieved_rotation_error = achieved_error_absolute[..., 3:]
+            # Both error vectors are world-frame vectors: rotate each into the base frame.
+            inverse_base_quaternion = quaternion_invert(base_quaternion)
+            achieved_position_error = quaternion_apply(inverse_base_quaternion, achieved_error_absolute[..., :3])
+            achieved_rotation_error = quaternion_apply(inverse_base_quaternion, achieved_error_absolute[..., 3:])
             achieved_error = torch.cat([achieved_position_error, achieved_rotation_error], dim=-1)
         return target_joint_positions, achieved_error
 

@@ -5,12 +5,14 @@ Wraps ``gs.options.sensors.IMU`` via ``scene.add_sensor()``.
 
 from __future__ import annotations
 
-from typing import Optional, Dict, Tuple, Union, Sequence
+from typing import Any, Optional, Dict, Tuple, Union, Sequence
+import numpy as np
 import torch
 from dataclasses import dataclass
 
 import genesis as gs
 from genesis.engine.sensors.imu import IMUSensor
+from genesis.utils.geom import euler_to_quat
 
 from unienv_interface.space import Space, DictSpace, BoxSpace
 from unienv_interface.backends.pytorch import (
@@ -25,7 +27,7 @@ from unienv_genesis.utils.batch_dim_utils import get_batch_aware_shape
 from unienv_genesis.options.attach_option import AttachmentProvider
 
 from unienv_interface.space.space_utils.metadata_utils import proprio_metadata
-from unienv_genesis.utils.space_metadata import attach_extras
+from unienv_genesis.utils.space_metadata import attach_extras, offset_extras
 
 from .base import SensorNode
 
@@ -66,7 +68,9 @@ class IMUSensorNode(SensorNode[IMUSensor, None, Dict[str, PyTorchArrayType]]):
 
     The sensor reports ``lin_acc``, ``ang_vel`` and ``mag`` — each a ``(3,)``
     tensor (unbatched) or ``(B, 3)`` tensor (batched).  All measurements are
-    expressed in the sensor/link local frame.
+    expressed in the sensor frame: the link frame moved by ``pos_offset`` and
+    rotated by ``euler_offset`` (space metadata ``frame="link_local"`` without
+    offsets, ``"sensor_local"`` plus the offsets with them).
 
     .. note::
 
@@ -190,6 +194,23 @@ class IMUSensorNode(SensorNode[IMUSensor, None, Dict[str, PyTorchArrayType]]):
         }
         self._last_observation = obs
 
+    def _frame_metadata(self) -> Dict[str, Any]:
+        """``frame`` (and offset) metadata of the readings.
+
+        Genesis reports all readings in the sensor frame: the attached link's
+        frame moved by ``pos_offset`` and rotated by ``euler_offset`` (the
+        accelerometer also measures at the offset point). Without offsets that
+        is the link frame, ``"link_local"``; with one it is ``"sensor_local"``,
+        with ``sensor_offset_pos`` (m) / ``sensor_offset_quat`` (``w, x, y,
+        z``, from ``euler_offset`` with Genesis' ``euler_to_quat``) giving the
+        sensor frame in the ``link``'s frame.
+        """
+        quat = euler_to_quat(np.asarray(self.option.euler_offset, dtype=np.float64))
+        offset = offset_extras("sensor", self.option.pos_offset, quat)
+        if not offset:
+            return {"frame": "link_local"}
+        return {"frame": "sensor_local", **offset}
+
     def _get_observation_space(
         self,
     ) -> DictSpace[PyTorchDeviceType, PyTorchDtypeType, PyTorchRNGType]:
@@ -197,9 +218,7 @@ class IMUSensorNode(SensorNode[IMUSensor, None, Dict[str, PyTorchArrayType]]):
         dtype = self.world.dtype
         device = self.world.device
         shape = get_batch_aware_shape(B, 3)
-        # All readings are in the sensor frame (the link frame rotated by
-        # ``euler_offset``).
-        common = dict(frame="link_local", names=["x", "y", "z"], **attach_extras(self.name, self.option.attach))
+        common = dict(names=["x", "y", "z"], **self._frame_metadata(), **attach_extras(self.name, self.option.attach))
         spaces: Dict[str, Space] = {
             "lin_acc": BoxSpace(
                 PyTorchComputeBackend,

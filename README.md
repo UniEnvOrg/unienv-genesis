@@ -72,10 +72,10 @@ find_spaces_by_metadata(franka.action_space, control="gripper")
 # [(("gripper",), BoxSpace(...))]
 ```
 
-- **Cameras**: `rgb` (`image`, `rgb` / `HWC`), `depth` (metres, `HW`), `seg` (`segmentation`, with the scene's segmentation level), `normal`, `position` (world `pointcloud`), `intrinsics_cv` / `extrinsics_cv` / `local_extrinsics_cv` (OpenCV `camera_cv` frame). `source` is the camera node's name.
-- **Joint readings and targets**: per-DOF `units` (`rad` / `rad/s` / `N*m` for revolute DOFs, `m` / `m/s` / `N` for prismatic ones) and `names` from the entity's joints; root and end-effector poses state their `frame` (`world`, or `base` with a configured `base_frame`) and `rotation="quat_wxyz"`.
+- **Cameras**: `rgb` (`image`, `rgb` / `HWC`), `depth` (metres, `HW`), `seg` (`segmentation`, with the scene's segmentation level), `normal` (world-frame unit normals), `position` (world `pointcloud`), `intrinsics_cv` / `extrinsics_cv` / `local_extrinsics_cv` (OpenCV `camera_cv` frame). `source` is the camera node's name.
+- **Joint readings and targets**: per-DOF `units` (`rad` / `rad/s` / `N*m` for revolute DOFs, `m` / `m/s` / `N` for prismatic ones) and `names` from the entity's joints; root and end-effector poses state their `frame` (`world`, or `base` with a configured `base_frame`, naming it with `base_link`) and `rotation="quat_wxyz"`; an end-effector pose names the `link` it is read from and, when the end effector is a virtual frame offset from that link (e.g. a fingertip), the offset as `eef_offset_pos` / `eef_offset_quat` (likewise `base_offset_pos` / `base_offset_quat` for an offset base frame).
 - **Actions**: `control` / `mode` (`joint_position`, `joint_velocity`, `eef_pose` with the `rotation` of its `rotation_representation`, `gripper` for a mimic gripper with `open_value` / `closed_value`).
-- **Tasks**: `kind="task"` goals and targets in the world frame.
+- **Tasks**: `kind="task"` goals and targets in the world frame; the current state a task reports alongside (an object's or a joint's current position) is `privileged`, the robot's own end-effector position `proprio`.
 
 Controller configs are checked as well: a keyword argument that no controller uses raises an `UnknownControllerOptionWarning` (see `EntityController.extra_attributes` for the extra attributes a controller config may carry).
 

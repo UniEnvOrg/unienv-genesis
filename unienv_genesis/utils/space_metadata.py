@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import genesis as gs
 
 from unienv_interface.space.space_utils.metadata_utils import (
@@ -28,6 +29,10 @@ __all__ = [
     "position_metadata",
     "quaternion_metadata",
     "pose_frame",
+    "frame_offset",
+    "offset_extras",
+    "eef_pose_extras",
+    "base_frame_extras",
     "attach_extras",
     "XYZ_NAMES",
     "QUAT_WXYZ_NAMES",
@@ -139,8 +144,104 @@ def joint_action_metadata(
 
 
 def pose_frame(has_base_frame: bool) -> str:
-    """The ``frame`` of a pose expressed in a configured base frame, else the world."""
+    """The ``frame`` of a pose expressed in a configured base frame, else the world.
+
+    A ``"base"`` pose also records which base (:func:`base_frame_extras`).
+    """
     return "base" if has_base_frame else "world"
+
+
+def frame_offset(
+    offset_pos: Optional[Sequence[float]],
+    offset_quat: Optional[Sequence[float]] = None,
+) -> Optional[Tuple[List[float], List[float]]]:
+    """The virtual-frame offset a pose reader applies, as JSON lists, or ``None``.
+
+    Mirrors the controllers and the end-effector state sensor: an offset is
+    applied only when ``offset_pos`` is set, with ``offset_quat`` defaulting
+    to the identity (an ``offset_quat`` without ``offset_pos`` is ignored by
+    them, so it is here too). Returns ``(pos, quat_wxyz)``, or ``None`` when
+    no offset is applied or it is the identity.
+    """
+    if offset_pos is None:
+        return None
+    pos = np.asarray(_as_numpy(offset_pos), dtype=np.float64).reshape(-1)
+    quat = (
+        np.array([1.0, 0.0, 0.0, 0.0])
+        if offset_quat is None
+        else np.asarray(_as_numpy(offset_quat), dtype=np.float64).reshape(-1)
+    )
+    identity = np.allclose(pos, 0.0, rtol=0.0, atol=1e-12) and (
+        np.allclose(quat, [1.0, 0.0, 0.0, 0.0], rtol=0.0, atol=1e-12)
+        or np.allclose(quat, [-1.0, 0.0, 0.0, 0.0], rtol=0.0, atol=1e-12)
+    )
+    if identity:
+        return None
+    return [float(v) for v in pos], [float(v) for v in quat]
+
+
+def _as_numpy(value: Any) -> Any:
+    """``value`` as something ``np.asarray`` takes (torch tensors moved to the CPU)."""
+    if hasattr(value, "detach"):
+        return value.detach().cpu().numpy()
+    return value
+
+
+def offset_extras(
+    prefix: str,
+    offset_pos: Optional[Sequence[float]],
+    offset_quat: Optional[Sequence[float]] = None,
+) -> Dict[str, List[float]]:
+    """``<prefix>_offset_pos`` (m) / ``<prefix>_offset_quat`` (``w, x, y, z``) of a non-identity offset.
+
+    The offset places a frame relative to the link it is attached to, in that
+    link's frame: ``p = link_pos + link_quat * offset_pos``, ``q = link_quat *
+    offset_quat``. Empty when there is no offset (see :func:`frame_offset`).
+    """
+    offset = frame_offset(offset_pos, offset_quat)
+    if offset is None:
+        return {}
+    pos, quat = offset
+    return {f"{prefix}_offset_pos": pos, f"{prefix}_offset_quat": quat}
+
+
+def eef_pose_extras(
+    link: Optional[str],
+    offset_pos: Optional[Sequence[float]] = None,
+    offset_quat: Optional[Sequence[float]] = None,
+) -> Dict[str, Any]:
+    """The ``link`` an EEF pose is read from, plus its virtual EEF offset.
+
+    An EEF configured with an offset (e.g. a fingertip 0.11 m from the hand
+    link) reports the pose of that offset frame, not of ``link``:
+    ``eef_offset_pos`` / ``eef_offset_quat`` give it in ``link``'s frame
+    (omitted without an offset).
+    """
+    extra: Dict[str, Any] = {}
+    if isinstance(link, str):
+        extra["link"] = link
+    extra.update(offset_extras("eef", offset_pos, offset_quat))
+    return extra
+
+
+def base_frame_extras(
+    base_link: Optional[str],
+    offset_pos: Optional[Sequence[float]] = None,
+    offset_quat: Optional[Sequence[float]] = None,
+    base_entity: Optional[str] = None,
+) -> Dict[str, Any]:
+    """What ``frame="base"`` refers to: the ``base_link`` (and ``base_entity``) plus its offset.
+
+    With a base-frame offset, poses are relative to the offset frame
+    ``base_offset_pos`` / ``base_offset_quat`` in ``base_link``'s frame.
+    """
+    extra: Dict[str, Any] = {}
+    if isinstance(base_entity, str):
+        extra["base_entity"] = base_entity
+    if isinstance(base_link, str):
+        extra["base_link"] = base_link
+    extra.update(offset_extras("base", offset_pos, offset_quat))
+    return extra
 
 
 def position_metadata(kind: str = "proprio", *, frame: str, **extra: Any) -> Dict[str, Any]:

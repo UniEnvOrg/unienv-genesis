@@ -686,7 +686,18 @@ class CameraSensorNode(SensorNode[
                 background=0,
                 **common,
             ),
-            "normal": metadata("normal", layout="HWC", names=["nx", "ny", "nz"], **common),
+            # Decoded from the renderers' colour encoding (see ``_decode_normal``).
+            "normal": metadata(
+                "normal",
+                layout="HWC",
+                frame="world",
+                names=["nx", "ny", "nz"],
+                label=(
+                    "world-frame unit surface normal per pixel, decoded from 8-bit colour (~0.008 "
+                    "quantization); pixels without a surface hold the decoded background colour"
+                ),
+                **common,
+            ),
             "position": metadata(
                 "pointcloud", layout="HWC", units="m", frame="world", names=["x", "y", "z"], **common,
             ),
@@ -723,7 +734,7 @@ class CameraSensorNode(SensorNode[
 
         Every key carries space metadata (:meth:`_space_metadata`): ``rgb`` is
         an ``rgb`` / ``HWC`` image, ``depth`` metric depth (``HW``), ``seg``
-        a segmentation index map, ``normal`` a surface-normal map,
+        a segmentation index map, ``normal`` world-frame unit surface normals,
         ``position`` a per-pixel world point cloud and the ``*_cv`` matrices
         are OpenCV intrinsics / extrinsics.
         """
@@ -1107,6 +1118,27 @@ class CameraSensorNode(SensorNode[
             conformed[key] = value
         return conformed
 
+    def _decode_normal(self, normal: torch.Tensor) -> torch.Tensor:
+        """World-frame unit normals from a rendered normal map.
+
+        Genesis' renderers write the world-frame normal ``n`` as the colour
+        ``(n + 1) / 2``: the ``Rasterizer`` (also behind the ``RayTracer``'s
+        and NYX's depth / segmentation / normal camera) through its
+        ``mesh_normal`` shader, the ``BatchRenderer`` (Madrona, rasterized or
+        ray traced) likewise; all of them return it as ``uint8`` colour. An
+        integer map is decoded with ``x / 127.5 - 1``, a floating-point one is
+        taken to be ``[0, 1]`` colour (``x * 2 - 1``). The result is clamped to
+        ``[-1, 1]``; it is not renormalized, so pixels without a surface keep
+        the decoded background colour (the Rasterizer's clear colour, the
+        ray-traced BatchRenderer's black, i.e. ``(-1, -1, -1)``) instead of
+        posing as unit normals.
+        """
+        if normal.dtype.is_floating_point:
+            decoded = normal.to(self.world.dtype) * 2.0 - 1.0
+        else:
+            decoded = normal.to(self.world.dtype) / 127.5 - 1.0
+        return decoded.clamp_(-1.0, 1.0)
+
     def update_observation(self) -> None:
         """Render and cache camera observations."""
         device = self.world.device
@@ -1152,7 +1184,7 @@ class CameraSensorNode(SensorNode[
             obs["seg"] = _to_tensor(segmentation)
 
         if self.render_normal:
-            obs["normal"] = _to_tensor(normal, dtype=self.world.dtype)
+            obs["normal"] = self._decode_normal(_to_tensor(normal))
 
         obs["intrinsics_cv"] = self._get_intrinsics()
         obs["extrinsics_cv"] = self._get_extrinsics()
@@ -1220,7 +1252,7 @@ class CameraSensorNode(SensorNode[
                 obs["seg"] = _to_tensor(segmentation)
 
             if self.render_normal:
-                obs["normal"] = _to_tensor(normal, dtype=self.world.dtype)
+                obs["normal"] = self._decode_normal(_to_tensor(normal))
 
         obs["intrinsics_cv"] = self._get_intrinsics()
         obs["extrinsics_cv"] = self._get_extrinsics()

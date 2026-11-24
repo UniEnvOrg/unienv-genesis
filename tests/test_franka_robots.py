@@ -250,6 +250,78 @@ def test_fr3_robotiq_tip_frame_is_flange_plus_offset():
     env.close()
 
 
+# ---------------------------------------------------------------------------
+# Space metadata of every collection robot (default combined controllers)
+# ---------------------------------------------------------------------------
+
+_COLLECTION_ROBOTS = [
+    ("franka_emika_panda", "FrankaEmikaPanda"),
+    ("franka_fr3_hand", "FrankaFR3WithHand"),
+    ("franka_fr3_robotiq_2f85", "FrankaFR3WithRobotiq2F85"),
+    ("franka_fr3_sharpa", "FrankaFR3WithSharpa"),
+    ("franka_fr3_allegro", "FrankaFR3WithAllegro"),
+    ("franka_fr3_leap", "FrankaFR3WithLeap"),
+    ("franka_fr3_wuji", "FrankaFR3WithWuji"),
+    ("franka_fr3_shadow", "FrankaFR3WithShadow"),
+    ("franka_fr3_dexee", "FrankaFR3WithDexee"),
+    ("franka_fr3_aero", "FrankaFR3WithAero"),
+    ("franka_fr3_leap_v1", "FrankaFR3WithLeapV1"),
+    ("franka_fr3_umi", "FrankaFR3WithUmi"),
+    ("franka_fr3_aloha", "FrankaFR3WithAloha"),
+    ("tianji_marvin_wuji", "TianjiMarvinWuji"),
+]
+
+
+@pytest.mark.parametrize("module_name, class_name", _COLLECTION_ROBOTS, ids=[m for m, _ in _COLLECTION_ROBOTS])
+def test_collection_robot_spaces_are_described(module_name, class_name):
+    """Every space of the robot validates; EEF poses name their link and virtual EEF offset."""
+    import importlib
+
+    from unienv_interface.space.space_utils.metadata_utils import validate_metadata
+
+    module = importlib.import_module(f"unienv_genesis_collection.robots.{module_name}")
+    robot = getattr(module, class_name)(GenesisWorld(), name="robot")
+    validate_metadata(robot.observation_space)
+    validate_metadata(robot.action_space)
+
+    n_eef = 0
+    for sub_name, config in module._DEFAULT_SUB_CONTROLLERS.items():
+        controller = robot.controller[sub_name]
+        validate_metadata(controller.get_action_dict_space())
+        attachment = config.get("target_link")
+        if attachment is None:
+            continue
+        n_eef += 1
+        expected = {"link": attachment.link_name}
+        offset_pos = attachment.offset_pos
+        if offset_pos is not None and any(float(v) != 0.0 for v in offset_pos):
+            quat = attachment.offset_quat if attachment.offset_quat is not None else (1.0, 0.0, 0.0, 0.0)
+            expected["eef_offset_pos"] = [float(v) for v in offset_pos]
+            expected["eef_offset_quat"] = [float(v) for v in quat]
+        obs = robot.observation_space[sub_name]
+        action_dict = controller.get_action_dict_space()
+        for md in (
+            obs["eef_position"].metadata.to_dict(),
+            obs["eef_quaternion"].metadata.to_dict(),
+            robot.action_space[sub_name].metadata.to_dict(),
+            action_dict["target_eef_position"].metadata.to_dict(),
+            action_dict["target_eef_quaternion"].metadata.to_dict(),
+        ):
+            assert md["frame"] == "world", sub_name
+            assert {k: v for k, v in md.items() if k == "link" or k.startswith("eef_offset_")} == expected, sub_name
+    assert n_eef >= 1
+
+
+def test_panda_records_the_fingertip_offset():
+    """The Panda's arm EEF is the fingertip, 0.1114 m beyond the hand link."""
+    robot = FrankaEmikaPanda(GenesisWorld(), name="franka")
+    md = robot.observation_space["arm"]["eef_position"].metadata.to_dict()
+    assert md["link"] == franka_emika_panda.EE_LINK_NAME
+    assert md["eef_offset_pos"] == [0.0, 0.0, 0.1114]
+    assert md["eef_offset_quat"] == [1.0, 0.0, 0.0, 0.0]
+    assert not any(k.startswith("base_") for k in md)
+
+
 if __name__ == "__main__":
     for mod in _VARIANT_MODULES:
         test_arm_max_joint_pos_vel_is_droid_limit(mod)

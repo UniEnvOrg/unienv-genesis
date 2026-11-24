@@ -26,6 +26,8 @@ from unienv_genesis.utils.batch_dim_utils import (
 from unienv_genesis.utils.space_metadata import (
     joint_action_metadata,
     joint_proprio_metadata,
+    base_frame_extras,
+    eef_pose_extras,
     pose_frame,
     position_metadata,
     quaternion_metadata,
@@ -339,6 +341,16 @@ class DiscreteEntityController(
 
         # Conditionally add EEF observation keys when an end-effector is configured
         self._has_eef = self._target_link_attachment is not None
+        # Space-metadata extras of the EEF poses: the link they are read from
+        # and its virtual EEF offset, and which base a "base" frame is.
+        eef_md_extras = (
+            eef_pose_extras(self._target_link_name, eef_offset_pos, eef_offset_quat)
+            if self._has_eef else {}
+        )
+        base_md_extras = (
+            base_frame_extras(self._base_frame_name, base_frame_offset_pos, base_frame_offset_quat)
+            if self._has_eef and self._base_frame_attachment is not None else {}
+        )
         if self._has_eef:
             eef_frame = pose_frame(self._base_frame_attachment is not None)
             obs_space['eef_position'] = BoxSpace(
@@ -348,7 +360,7 @@ class DiscreteEntityController(
                 shape=get_batch_aware_shape(batch_size, 3),
                 dtype=world.dtype,
                 device=world.device,
-                metadata=position_metadata(frame=eef_frame, link=self._target_link_name),
+                metadata=position_metadata(frame=eef_frame, **eef_md_extras, **base_md_extras),
             )
             obs_space['eef_quaternion'] = BoxSpace(
                 PyTorchComputeBackend,
@@ -357,10 +369,12 @@ class DiscreteEntityController(
                 shape=get_batch_aware_shape(batch_size, 4),
                 dtype=world.dtype,
                 device=world.device,
-                metadata=quaternion_metadata(frame=eef_frame, link=self._target_link_name),
+                metadata=quaternion_metadata(frame=eef_frame, **eef_md_extras, **base_md_extras),
             )
         
         super().__init__(world, entity, obs_space, action_space, **kwargs)
+        self._eef_md_extras = eef_md_extras
+        self._base_md_extras = base_md_extras
 
         # Store the broadcasted limits as attributes
         self.joint_position_low = joint_position_low
@@ -724,6 +738,20 @@ class DiscreteEntityController(
             return None
         return pose_frame(self._base_frame_attachment is not None)
 
+    @property
+    def eef_pose_metadata(self) -> Dict[str, Any]:
+        """Space-metadata extras of this controller's EEF poses (empty without an EEF).
+
+        ``link`` (the ``target_link``), ``eef_offset_pos`` / ``eef_offset_quat``
+        when the EEF is a virtual frame offset from it, and with a base frame
+        ``base_link`` plus ``base_offset_pos`` / ``base_offset_quat`` when the
+        base is offset from that link (see
+        :func:`unienv_genesis.utils.space_metadata.eef_pose_extras` /
+        :func:`~unienv_genesis.utils.space_metadata.base_frame_extras`). The
+        ``frame`` is :attr:`eef_frame`.
+        """
+        return {**self._eef_md_extras, **self._base_md_extras}
+
     def _joint_target_metadata(self, control: str, **extra: Any) -> Dict[str, Any]:
         """Action metadata of absolute per-joint targets of the controlled DOFs."""
         return joint_action_metadata(self.entity, self.joint_indexes, control, **extra)
@@ -749,7 +777,7 @@ class DiscreteEntityController(
             return {}
         batch_size = self.world.batch_size
         device = self.world.device
-        common = dict(control="eef_pose", mode="absolute", frame=self.eef_frame, link=self._target_link_name)
+        common = dict(control="eef_pose", mode="absolute", frame=self.eef_frame, **self.eef_pose_metadata)
         return {
             "target_eef_position": BoxSpace(
                 PyTorchComputeBackend,

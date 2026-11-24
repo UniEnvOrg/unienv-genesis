@@ -30,6 +30,9 @@ from unienv_genesis.world.genesis_world import GenesisWorld
 from unienv_genesis.utils.batch_dim_utils import get_batch_aware_shape
 from unienv_genesis.options.attach_option import AttachmentProvider
 from unienv_genesis.utils.space_metadata import (
+    attach_extras,
+    base_frame_extras,
+    offset_extras,
     pose_frame,
     position_metadata,
     quaternion_metadata,
@@ -299,10 +302,24 @@ class EndEffectorStateSensorNode(SensorNode[None, None, Dict[str, PyTorchArrayTy
         dtype = self.world.dtype
         device = self.world.device
         frame = pose_frame(self.option.base_frame is not None)
-        extra = {"source": self.name}
-        link_name = getattr(self.option.attach, "link_name", None)
-        if isinstance(link_name, str):
-            extra["link"] = link_name
+        # ``source`` / ``entity`` / ``link`` of the attachment, its virtual EEF
+        # offset and, with a base frame, which base (and its offset).
+        extra = {
+            **attach_extras(self.name, self.option.attach),
+            **offset_extras(
+                "eef",
+                getattr(self.option.attach, "offset_pos", None),
+                getattr(self.option.attach, "offset_quat", None),
+            ),
+        }
+        base = self.option.base_frame
+        if base is not None:
+            extra.update(base_frame_extras(
+                getattr(base, "link_name", None),
+                getattr(base, "offset_pos", None),
+                getattr(base, "offset_quat", None),
+                base_entity=getattr(base, "entity_name", None),
+            ))
         spaces: Dict[str, Space] = {
             "eef_position": BoxSpace(
                 PyTorchComputeBackend,

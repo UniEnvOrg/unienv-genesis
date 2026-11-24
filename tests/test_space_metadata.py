@@ -53,7 +53,7 @@ from unienv_genesis.nodes.sensors import (
     JointStateSensorNodeOptions,
     KeypointTrackerNode,
 )
-from unienv_genesis.options.attach_option import AttachFromName
+from unienv_genesis.options.attach_option import AttachFromName, LinkAttachment
 from unienv_genesis.utils.space_metadata import dof_names, dof_units
 
 PANDA_XML = os.path.join(get_assets_dir(), "xml", "franka_emika_panda", "panda.xml")
@@ -103,6 +103,20 @@ def _make_panda(batch_size=None, rotation_representation="euler", normalize_rota
             "controller_type": "mimic_joint_velocity",
             "joint_names": FINGER_JOINTS,
             "multiplier": 0.05,
+        },
+        # A position + velocity mimic controller configured as a gripper.
+        "gripper_pv": {
+            "controller_type": "mimic_joint_position_and_velocity",
+            "joint_names": FINGER_JOINTS,
+            "position_multiplier": -0.02,
+            "position_shift": 0.02,
+            "position_control_low": -1,
+            "position_control_high": 1,
+            "velocity_multiplier": 0.05,
+            "velocity_control_low": -1,
+            "velocity_control_high": 1,
+            "gripper_open_action": -1.0,
+            "gripper_close_action": 1.0,
         },
     }
     return RobotDescriptionNode(
@@ -162,6 +176,11 @@ def test_controller_spaces_are_described(batch_size):
     assert arm_obs["eef_position"].metadata.to_dict()["units"] == "m"
     assert arm_obs["eef_quaternion"].metadata.to_dict()["rotation"] == "quat_wxyz"
     assert arm_obs["eef_quaternion"].metadata.to_dict()["link"] == "hand"
+    # "base" names the base link; no offsets are configured, so none are recorded.
+    for key in ("eef_position", "eef_quaternion", "last_ik_solved_error"):
+        md = arm_obs[key].metadata.to_dict()
+        assert md["base_link"] == "link0", key
+        assert not any(k.startswith(("eef_offset_", "base_offset_")) for k in md), key
     assert arm_obs["last_ik_solved_error"].metadata.to_dict()["units"] == ["m"] * 3 + ["rad"] * 3
 
     # Joint position / velocity targets.
@@ -209,6 +228,27 @@ def test_gripper_and_mimic_actions():
         assert velocity.metadata.to_dict()["units"] == ["m/s", "m/s"], name
 
 
+def test_mimic_position_velocity_gripper():
+    """A position + velocity mimic controller with the gripper description is a gripper command."""
+    robot = _make_panda()
+    space = robot.action_space["gripper_pv"]
+    validate_metadata(space)
+    position = space["target_joint_position"].metadata.to_dict()
+    assert (position["kind"], position["control"], position["mode"]) == ("action", "gripper", "absolute")
+    assert position["normalized"] is True and position["units"] == "normalized"
+    assert (position["open_value"], position["closed_value"]) == (-1.0, 1.0)
+    assert position["mimic_joints"] == FINGER_JOINTS
+    assert position["multiplier"] == [-0.02, -0.02] and position["shift"] == [0.02, 0.02]
+    velocity = space["target_joint_velocity"].metadata.to_dict()
+    assert (velocity["control"], velocity["mode"]) == ("gripper", "velocity")
+    assert velocity["normalized"] is True and velocity["multiplier"] == [0.05, 0.05]
+
+    action_dict = robot.controller["gripper_pv"].get_action_dict_space()
+    validate_metadata(action_dict)
+    assert action_dict["target_joint_position"].metadata.to_dict()["units"] == ["m", "m"]
+    assert action_dict["target_joint_velocity"].metadata.to_dict()["units"] == ["m/s", "m/s"]
+
+
 @pytest.mark.parametrize(
     "representation, normalize, rotation, rot_units",
     [
@@ -237,6 +277,99 @@ def test_eef_pose_action_rotation(representation, normalize, rotation, rot_units
     action_dict = robot.controller["arm"].get_action_dict_space()
     assert action_dict["target_eef_position"].metadata.to_dict()["frame"] == "base"
     assert action_dict["target_eef_quaternion"].metadata.to_dict()["rotation"] == "quat_wxyz"
+
+
+# A fingertip-like EEF 0.1 m beyond the hand, turned 45 deg about z, and a base
+# frame 5 cm above link0, turned 90 deg about z.
+EEF_OFFSET_POS = [0.0, 0.0, 0.1]
+EEF_OFFSET_QUAT = [math.cos(math.pi / 8), 0.0, 0.0, math.sin(math.pi / 8)]
+BASE_OFFSET_POS = [0.0, 0.0, 0.05]
+BASE_OFFSET_QUAT = [math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4)]
+
+
+def _make_offset_panda(base_frame=True):
+    arm = {
+        "controller_type": "eef_pose",
+        "joint_names": ARM_JOINTS,
+        "target_link": LinkAttachment("hand", offset_pos=EEF_OFFSET_POS, offset_quat=EEF_OFFSET_QUAT),
+        "rotation_representation": "quat",
+    }
+    if base_frame:
+        arm["base_frame"] = LinkAttachment("link0", offset_pos=BASE_OFFSET_POS, offset_quat=BASE_OFFSET_QUAT)
+    return RobotDescriptionNode(
+        GenesisWorld(), PANDA_XML, name="panda", controller_type="combined", sub_controllers={"arm": arm},
+    )
+
+
+def test_eef_offset_and_base_frame_metadata():
+    """EEF poses name their link, the virtual EEF offset and which base "base" is."""
+    robot = _make_offset_panda()
+    arm = robot.controller["arm"]
+    eef_extras = {
+        "link": "hand", "eef_offset_pos": EEF_OFFSET_POS, "eef_offset_quat": EEF_OFFSET_QUAT,
+    }
+    base_extras = {
+        "base_link": "link0", "base_offset_pos": BASE_OFFSET_POS, "base_offset_quat": BASE_OFFSET_QUAT,
+    }
+    validate_metadata(robot.observation_space)
+    validate_metadata(robot.action_space)
+    validate_metadata(arm.get_action_dict_space())
+    assert arm.eef_pose_metadata == {**eef_extras, **base_extras}
+
+    obs = robot.observation_space["arm"]
+    assert obs["eef_position"].metadata.to_dict() == {
+        "kind": "proprio", "units": "m", "frame": "base", "names": ["x", "y", "z"], **eef_extras, **base_extras,
+    }
+    action_dict = arm.get_action_dict_space()
+    for md in (
+        obs["eef_quaternion"].metadata.to_dict(),
+        robot.action_space["arm"].metadata.to_dict(),
+        action_dict["target_eef_position"].metadata.to_dict(),
+        action_dict["target_eef_quaternion"].metadata.to_dict(),
+    ):
+        assert md["frame"] == "base"
+        assert {k: md[k] for k in (*eef_extras, *base_extras)} == {**eef_extras, **base_extras}
+    # The IK error is the error of the physical link: no EEF offset, same base.
+    md = obs["last_ik_solved_error"].metadata.to_dict()
+    assert md["frame"] == "base" and md["link"] == "hand"
+    assert {k: md[k] for k in base_extras} == base_extras
+    assert not any(k.startswith("eef_offset_") for k in md)
+
+    # Without a base frame: world poses, no base keys.
+    robot = _make_offset_panda(base_frame=False)
+    md = robot.observation_space["arm"]["eef_position"].metadata.to_dict()
+    assert md["frame"] == "world"
+    assert {k: md[k] for k in eef_extras} == eef_extras
+    assert not any(k.startswith("base_") for k in md)
+
+
+def test_ik_error_is_in_the_base_frame():
+    """``solve_ik_base`` rotates both parts of the (world-frame) IK error into the base frame."""
+    robot = _make_offset_panda()
+    WorldEnv(robot.world, [robot], render_mode=None).reset(seed=0, reload=True)
+    arm = robot.controller["arm"]
+    link0_quat = robot.entity.get_link("link0").get_quat().cpu()
+    assert torch.allclose(link0_quat, torch.tensor([1.0, 0.0, 0.0, 0.0]), atol=1e-6)
+    # Base = link0 turned 90 deg about z: base-frame vector = R^T @ world-frame vector.
+    rotation = torch.tensor([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+
+    # An unreachable target, tilted about x, leaves a position and a rotation error.
+    target_pos = torch.tensor([1.5, 0.4, 0.3])
+    half = math.radians(100.0) / 2
+    target_quat = torch.tensor([math.cos(half), math.sin(half), 0.0, 0.0])
+    _, error_world = arm.solve_ik_absolute(target_pos, target_quat)
+    _, error_base = arm.solve_ik_base(*arm.convert_absolute_to_base(target_pos, target_quat))
+    error_world, error_base = error_world.cpu(), error_base.cpu()
+    assert float(error_world[:3].norm()) > 0.1 and float(error_world[3:].norm()) > 0.05
+    assert torch.allclose(error_base[:3], rotation.T @ error_world[:3], atol=1e-4)
+    assert torch.allclose(error_base[3:], rotation.T @ error_world[3:], atol=1e-4)
+    # The rotation turned the error vectors (the world-frame values are not the base-frame ones).
+    assert not torch.allclose(error_base[3:], error_world[3:], atol=1e-2)
+
+    # The observation reports the base-frame error of the last applied action.
+    arm.apply_action(arm.get_action_world(target_pos, target_quat))
+    observed = arm.get_observation()["last_ik_solved_error"].cpu()
+    assert torch.allclose(observed, error_base, atol=1e-4)
 
 
 def test_ref_policy_action_dict_space_keeps_controller_metadata():
@@ -367,7 +500,19 @@ def test_sensor_spaces_are_described():
     assert (depth["near"], depth["far"]) == (0.1, 20.0)
     seg = cam["seg"].metadata.to_dict()
     assert (seg["kind"], seg["layout"], seg["level"]) == ("segmentation", "HW", "link")
-    assert cam["normal"].metadata.to_dict()["kind"] == "normal"
+    normal_md = cam["normal"].metadata.to_dict()
+    assert (normal_md["kind"], normal_md["frame"], normal_md["layout"]) == ("normal", "world", "HWC")
+    # The rasterizer's colour-encoded normals are decoded to world-frame unit
+    # vectors: the plane faces +z, the box face towards the camera +x.
+    normal = obs["normal"]
+    assert normal.shape == (48, 64, 3) and normal.dtype == cam["normal"].dtype
+    assert float(normal.min()) >= -1.0 and float(normal.max()) <= 1.0
+    # Unit length up to the 8-bit quantization (multisampled silhouette pixels blend two normals).
+    unit = ((normal.norm(dim=-1) - 1.0).abs() < 0.02).float().mean()
+    assert unit > 0.95, unit
+    up = (normal - torch.tensor([0.0, 0.0, 1.0])).norm(dim=-1) < 0.02
+    towards_camera = (normal - torch.tensor([1.0, 0.0, 0.0])).norm(dim=-1) < 0.02
+    assert up.float().mean() > 0.3 and towards_camera.float().mean() > 0.01
     position = cam["position"].metadata.to_dict()
     assert (position["kind"], position["units"], position["frame"], position["layout"]) == (
         "pointcloud", "m", "world", "HWC",
@@ -384,6 +529,82 @@ def test_sensor_spaces_are_described():
     assert keypoints["points_2d"].metadata.to_dict()["units"] == "px"
     assert keypoints["point_segmentations"].metadata.to_dict()["level"] == "link"
     assert keypoints["visibility_masks"].metadata.to_dict()["kind"] == "mask"
+    env.close()
+
+
+def test_batched_sensor_spaces_are_described():
+    """The sensors in a batched world, with offsets: IMU, EEF state with a base frame, ..."""
+    batch_size = 2
+    world = GenesisWorld(batch_size=batch_size)
+    eef_offset_pos, eef_offset_quat = (0.0, 0.0, 0.05), (0.0, 1.0, 0.0, 0.0)
+    base_offset_pos, base_offset_quat = (0.1, 0.0, 0.0), (math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4))
+    eef_option = EndEffectorStateSensorNodeOptions(
+        attach=AttachFromName("box", "box_baselink", offset_pos=eef_offset_pos, offset_quat=eef_offset_quat),
+        base_frame=AttachFromName(
+            "plane", "plane_baselink", offset_pos=base_offset_pos, offset_quat=base_offset_quat,
+        ),
+    )
+    link = AttachFromName("box", "box_baselink")
+    nodes = [
+        JointStateSensorNode(
+            world, "joints",
+            JointStateSensorNodeOptions(attach=AttachFromName("box"), read_motor_torque=True, read_root_pose=True),
+        ),
+        EndEffectorStateSensorNode(world, "eef", eef_option),
+        # Sensor frame: 5 cm above the link origin, turned 90 deg about z.
+        IMUSensorNode(world, "imu", IMUSensorNodeOptions(attach=link, pos_offset=(0.0, 0.0, 0.05), euler_offset=(0.0, 0.0, 90.0))),
+        IMUSensorNode(world, "imu_plain", IMUSensorNodeOptions(attach=link)),
+        ContactForceSensorNode(world, "force", ContactForceSensorNodeOptions(attach=link)),
+        ContactSensorNode(world, "contact", ContactSensorNodeOptions(attach=link)),
+    ]
+    env = WorldEnv(world, [_BoxNode(world), *nodes], render_mode=None)
+    env.reset(seed=0, reload=True)
+    validate_metadata(env.observation_space)
+    for node in nodes:
+        validate_metadata(node.observation_space)
+        obs = node.get_observation()
+        for key, space in node.observation_space.spaces.items():
+            assert space.shape[0] == batch_size, (node.name, key)
+            assert tuple(obs[key].shape) == tuple(space.shape), (node.name, key)
+
+    # EEF state in an offset base frame: which base, and both offsets.
+    eef = nodes[1].observation_space
+    for key in ("eef_position", "eef_quaternion"):
+        md = eef[key].metadata.to_dict()
+        assert (md["frame"], md["source"], md["entity"], md["link"]) == ("base", "eef", "box", "box_baselink"), key
+        assert md["eef_offset_pos"] == list(eef_offset_pos) and md["eef_offset_quat"] == list(eef_offset_quat), key
+        assert (md["base_entity"], md["base_link"]) == ("plane", "plane_baselink"), key
+        assert md["base_offset_pos"] == list(base_offset_pos), key
+        assert md["base_offset_quat"] == list(base_offset_quat), key
+
+    # IMU: an offset sensor frame is not the link frame; the recorded offset is
+    # the one Genesis applies.
+    imu = nodes[2]
+    applied_quat = imu.sensor._shared_metadata.offsets_quat[0, imu.sensor._idx].cpu().double()
+    for key in ("lin_acc", "ang_vel", "mag"):
+        md = imu.observation_space[key].metadata.to_dict()
+        assert (md["frame"], md["link"]) == ("sensor_local", "box_baselink"), key
+        assert md["sensor_offset_pos"] == [0.0, 0.0, 0.05], key
+        assert torch.allclose(
+            torch.tensor(md["sensor_offset_quat"], dtype=torch.float64), applied_quat, atol=1e-6,
+        ), key
+        assert torch.allclose(
+            torch.tensor(md["sensor_offset_quat"], dtype=torch.float64),
+            torch.tensor([math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4)], dtype=torch.float64),
+            atol=1e-9,
+        ), key
+    md = nodes[3].observation_space["lin_acc"].metadata.to_dict()
+    assert md["frame"] == "link_local"
+    assert not any(k.startswith("sensor_offset_") for k in md)
+
+    # A camera in the batched world declares the same (batched) leaves.
+    camera = CameraSensorNode(
+        world, "front", CameraSensorNodeOptions(res=(32, 24)),
+        render_depth=True, render_seg=True, render_normal=True, render_position=True,
+    )
+    validate_metadata(camera.observation_space)
+    assert camera.observation_space["normal"].shape == (batch_size, 24, 32, 3)
+    assert camera.observation_space["normal"].metadata.to_dict()["frame"] == "world"
     env.close()
 
 
