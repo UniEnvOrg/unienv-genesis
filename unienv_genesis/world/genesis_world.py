@@ -18,6 +18,14 @@ from unienv_genesis.options.light_option import GenesisWorldLightOption, Genesis
 
 logger = logging.getLogger(__name__)
 
+# Genesis sensor modules whose sensors read what only a physics step computes (contacts, contact / actuator
+# forces). genesis-world >= 1.5 returns None for those after a build, a reset or a state write, so the no-advance
+# sensor refresh skips these sensors then (see ``GenesisWorld._refresh_sensor_caches``).
+_STEP_DATA_SENSOR_MODULES = frozenset({
+    "contact_force", "joint_torque", "kinematic_tactile", "point_cloud_tactile", "temperature",
+})
+
+
 class GenesisWorld(World[PyTorchArrayType, PyTorchDeviceType, PyTorchDtypeType, PyTorchRNGType]):
     """World backend using Genesis physics simulator with PyTorch backend.
     
@@ -360,8 +368,31 @@ class GenesisWorld(World[PyTorchArrayType, PyTorchDeviceType, PyTorchDtypeType, 
         if self.scene is None or not getattr(self.scene, "is_built", False):
             return
         sm = getattr(getattr(self.scene, "_sim", None), "_sensor_manager", None)
-        if sm is not None:
+        if sm is None:
+            return
+        if not self._step_data_is_stale():
             sm.step()
+            return
+        # genesis-world >= 1.5: after a build, a reset or a state write the contacts and the forces are unknown
+        # until the next physics step (their getters return None), and the sensors reading them would fail. Refresh
+        # the others only; those keep their (zero / previous) cache until the first ``env.step()``.
+        by_type = sm._sensors_by_type
+        sm._sensors_by_type = {
+            sensor_cls: sensors for sensor_cls, sensors in by_type.items()
+            if sensor_cls.__module__.rsplit(".", 1)[-1] not in _STEP_DATA_SENSOR_MODULES
+        }
+        try:
+            sm.step()
+        finally:
+            sm._sensors_by_type = by_type
+
+    def _step_data_is_stale(self) -> bool:
+        """Whether the solver's contacts are unknown until the next physics step (genesis-world >= 1.5 only)."""
+        solver = getattr(getattr(self.scene, "sim", None), "rigid_solver", None)
+        collider = getattr(solver, "collider", None)
+        if collider is None:
+            return False
+        return collider.get_contacts(as_tensor=True, to_torch=True) is None
         
     def close(self) -> None:
         """Close the Genesis simulation and cleanup."""

@@ -887,8 +887,14 @@ class DiscreteEntityController(
     def get_observation(self):
         qpos = self.entity.get_dofs_position(dofs_idx_local=self.joint_indexes)
         qvel = self.entity.get_dofs_velocity(dofs_idx_local=self.joint_indexes)
+        # Forces come from a physics step: genesis-world >= 1.5 returns None for them after a build, a reset or a
+        # state write until the next step (older versions returned stale values); read them as zeros until then.
         joint_torque = self.entity.get_dofs_force(dofs_idx_local=self.joint_indexes)
         joint_motor_torque = self.entity.get_dofs_control_force(dofs_idx_local=self.joint_indexes)
+        if joint_torque is None:
+            joint_torque = torch.zeros_like(qpos)
+        if joint_motor_torque is None:
+            joint_motor_torque = torch.zeros_like(qpos)
         root_pos = self.entity.get_pos()
         root_quat = self.entity.get_quat()
         obs = {

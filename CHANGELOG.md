@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **`genesis-world` is capped below 1.5**: genesis-world 1.5.0 returns `None` from `get_dofs_force()` and the contact-force sensors until the first physics step, and the joint-state and contact sensor nodes read them on reset (CI on Python 3.12 picked up 1.5.0 and failed 15 tests).
+- **genesis-world 1.5 support** (1.4 still works). genesis-world 1.5 reports the forces and the contacts as unknown (`None`) after a build, a reset or a state write until the next physics step, where 1.4 returned stale values. `JointStateSensorNode` and the controllers' observations read `joint_torque` / `joint_motor_torque` as zeros until then, the collection grippers' grasp detection reports no grasp, and the world's no-advance sensor refresh after a reset or reload leaves out the sensors that read step data (contact, contact force, joint torque, tactile, temperature), which read zero until the first `env.step()` as before; the IMU is still refreshed.
 
 ### Added
 

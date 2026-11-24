@@ -192,16 +192,22 @@ class JointStateSensorNode(SensorNode[None, None, Dict[str, PyTorchArrayType]]):
         def _t(x: PyTorchArrayType) -> PyTorchArrayType:
             return torch.as_tensor(x, dtype=dtype, device=device)
 
+        def _t_or_zeros(x: Optional[PyTorchArrayType], like: PyTorchArrayType) -> PyTorchArrayType:
+            return torch.zeros_like(like) if x is None else _t(x)
+
         obs: Dict[str, PyTorchArrayType] = {}
+        position = _t(entity.get_dofs_position(dofs_idx_local=dofs_idx))
         if self.option.read_position:
-            obs["joint_position"] = _t(entity.get_dofs_position(dofs_idx_local=dofs_idx))
+            obs["joint_position"] = position
         if self.option.read_velocity:
             obs["joint_velocity"] = _t(entity.get_dofs_velocity(dofs_idx_local=dofs_idx))
+        # Forces come from a physics step: genesis-world >= 1.5 returns None for them after a build, a reset or a
+        # state write until the next step (older versions returned stale values); read them as zeros until then.
         if self.option.read_torque:
-            obs["joint_torque"] = _t(entity.get_dofs_force(dofs_idx_local=dofs_idx))
+            obs["joint_torque"] = _t_or_zeros(entity.get_dofs_force(dofs_idx_local=dofs_idx), position)
         if self.option.read_motor_torque:
-            obs["joint_motor_torque"] = _t(
-                entity.get_dofs_control_force(dofs_idx_local=dofs_idx)
+            obs["joint_motor_torque"] = _t_or_zeros(
+                entity.get_dofs_control_force(dofs_idx_local=dofs_idx), position
             )
         if self.option.read_root_pose:
             obs["root_pos"] = _t(entity.get_pos())
