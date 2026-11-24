@@ -419,13 +419,14 @@ def test_observation_space_batched_and_unbatched():
 
         # Space metadata: the "joint_position" is an open fraction, not radians.
         validate_metadata(task.observation_space)
-        for key in ("joint_position", "target_fraction"):
+        # The current fraction is privileged state, the goal a task leaf.
+        for key, kind in (("joint_position", "privileged"), ("target_fraction", "task")):
             md = spaces[key].metadata.to_dict()
-            assert md["kind"] == "task" and md["units"] == "normalized", key
+            assert md["kind"] == kind and md["units"] == "normalized", key
             assert md["normalized"] is True, key
             assert md["joint"] == "drawer_slide" and md["furniture"] == "counter", key
         handle = spaces["handle_position"].metadata.to_dict()
-        assert (handle["kind"], handle["units"], handle["frame"]) == ("task", "m", "world")
+        assert (handle["kind"], handle["units"], handle["frame"]) == ("privileged", "m", "world")
 
 
 def test_after_reload_binds_by_name():

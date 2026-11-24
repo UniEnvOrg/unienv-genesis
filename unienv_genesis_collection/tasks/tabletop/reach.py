@@ -144,7 +144,8 @@ class ReachTargetTask(WorldNode):
                 shape=get_batch_aware_shape(self.world.batch_size, 3),
                 dtype=self.world.dtype,
                 device=self.world.device,
-                metadata=position_metadata("task", frame="world", label="end-effector position"),
+                # The robot's own (current) EEF position; the goal is target_position.
+                metadata=position_metadata("proprio", frame="world", label="end-effector position"),
             ),
             "target_position": BoxSpace(
                 PyTorchComputeBackend,

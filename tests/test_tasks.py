@@ -172,11 +172,12 @@ def test_reach_observation_space_batched():
             f"{key} space on {task.observation_space[key].device}, expected {world.device}"
         )
 
-    # Space metadata: world-frame task positions / orientation.
+    # Space metadata: world-frame positions / orientation; the goal is a task
+    # leaf, the robot's own EEF position proprioception.
     validate_metadata(task.observation_space)
-    for key in ("eef_position", "target_position"):
+    for key, kind in (("eef_position", "proprio"), ("target_position", "task")):
         md = task.observation_space[key].metadata.to_dict()
-        assert (md["kind"], md["units"], md["frame"]) == ("task", "m", "world"), key
+        assert (md["kind"], md["units"], md["frame"]) == (kind, "m", "world"), key
     md = task.observation_space["target_orientation"].metadata.to_dict()
     assert (md["kind"], md["rotation"], md["frame"]) == ("task", "quat_wxyz", "world")
 
@@ -364,11 +365,12 @@ def test_pickplace_priorities_explicit_zero():
     assert task.reset_priorities == {0}, task.reset_priorities
     assert task.after_reload_priorities == {0}, task.after_reload_priorities
 
-    # Space metadata: world-frame object / goal positions.
+    # Space metadata: world-frame object / goal positions; the object's current
+    # position is privileged state, the goal a task leaf.
     validate_metadata(task.observation_space)
-    for key in ("target_position", "goal_position"):
+    for key, kind in (("target_position", "privileged"), ("goal_position", "task")):
         md = task.observation_space[key].metadata.to_dict()
-        assert (md["kind"], md["units"], md["frame"]) == ("task", "m", "world"), key
+        assert (md["kind"], md["units"], md["frame"]) == (kind, "m", "world"), key
 
     print("  PASS: pickplace explicit priority 0 honored")
     world.close()

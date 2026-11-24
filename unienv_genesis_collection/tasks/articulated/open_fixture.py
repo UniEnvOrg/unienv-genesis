@@ -251,7 +251,8 @@ class OpenArticulatedJointTask(WorldNode):
                     shape=fraction_shape,
                     dtype=self.world.dtype,
                     device=self.world.device,
-                    metadata=metadata("task", label="current open fraction of the joint", **fraction_md),
+                    # The joint's current state (simulator state); the goal is target_fraction.
+                    metadata=metadata("privileged", label="current open fraction of the joint", **fraction_md),
                 ),
                 "target_fraction": BoxSpace(
                     PyTorchComputeBackend,
@@ -269,8 +270,9 @@ class OpenArticulatedJointTask(WorldNode):
                     shape=get_batch_aware_shape(self.world.batch_size, 3),
                     dtype=self.world.dtype,
                     device=self.world.device,
+                    # The handle's current position (simulator state), not a goal.
                     metadata=position_metadata(
-                        "task", frame="world", label="handle link bounding-box centre",
+                        "privileged", frame="world", label="current handle link bounding-box centre",
                         furniture=furniture_key, joint=joint_name,
                     ),
                 ),

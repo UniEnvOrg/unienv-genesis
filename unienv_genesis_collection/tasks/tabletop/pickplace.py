@@ -104,8 +104,10 @@ class ObjectRelocateTask(WorldNode):
                     shape=get_batch_aware_shape(self.world.batch_size, 3),
                     dtype=self.world.dtype,
                     device=self.world.device,
+                    # The object's current position (simulator state), not a goal.
                     metadata=position_metadata(
-                        "task", frame="world", label="position of the object to move (entity origin)",
+                        "privileged", frame="world",
+                        label="current position of the object to move (entity origin)",
                     ),
                 ),
                 "goal_position": BoxSpace(
