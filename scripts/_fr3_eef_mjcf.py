@@ -238,6 +238,7 @@ def write_model(
     home: str | None = None,
     hand_childclass: str | None = None,
     comment: str = "",
+    directory: str | None = None,
 ) -> pathlib.Path:
     """Merge ``hand_root`` (already posed on the flange) into the FR3 and write the combined MJCF.
 
@@ -257,6 +258,8 @@ def write_model(
             ``childclass="fr3"``, so without this every hand body and joint would inherit the arm's class (its
             joints' ``frictionloss`` of 1.137 N m alone stalls the fingers).
         comment: a comment written at the top of the file (provenance).
+        directory: the folder under ``assets/robots`` (default ``franka_fr3_<name>``), e.g. to write a second side's
+            model next to the first.
     """
     arm = load_arm()
     root = ET.Element("mujoco", model=f"fr3_{name}")
@@ -294,7 +297,7 @@ def write_model(
         ET.SubElement(con, "exclude", body1=e[0], body2=e[1])
     hand_home = home if home is not None else " ".join(["0"] * n_hand_joints)
     ET.SubElement(ET.SubElement(root, "keyframe"), "key", name="home", qpos=f"{FR3_HOME} {hand_home}".strip())
-    path = ROBOTS / f"franka_fr3_{name}" / f"fr3_{name}.xml"
+    path = ROBOTS / (directory or f"franka_fr3_{name}") / f"fr3_{name}.xml"
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root, space="  ")
     ET.ElementTree(root).write(path, encoding="unicode")

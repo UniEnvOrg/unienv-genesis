@@ -27,7 +27,11 @@ Conversion:
   frame, with +x out of the palm (the model's -y, where the fingers curl to), +z along the fingers (the model's
   +z) and +y toward the thumb (the model's +x).
 
-Run from the repository root:  python scripts/build_fr3_shadow_mjcf.py
+* **Left hand.** ``--side left`` builds ``franka_fr3_shadow/fr3_shadow_left.xml`` from ``shadow_hand/left_hand.xml``
+  (upstream's mirror of the right model across the palm's x): the same names (the ``lh_`` prefix goes), the same
+  palm frame constants (+x out of the palm, +z along the fingers; +y then points away from the thumb) and mount.
+
+Run from the repository root:  python scripts/build_fr3_shadow_mjcf.py [--side right|left|both]
 """
 
 from __future__ import annotations
@@ -68,8 +72,9 @@ X_PALM, Y_PALM, Z_PALM = np.array([0.0, -1.0, 0.0]), np.array([1.0, 0.0, 0.0]), 
 PALM_BACK = 0.019
 
 
-def build() -> pathlib.Path:
-    hand = ET.parse(ROBOTS / "shadow_hand" / "right_hand.xml").getroot()
+def build(side: str = "right") -> pathlib.Path:
+    p = {"right": "rh_", "left": "lh_"}[side]
+    hand = ET.parse(ROBOTS / "shadow_hand" / f"{side}_hand.xml").getroot()
     meshdir = hand.find("compiler").get("meshdir", "")
     for tag in ("tendon", "sensor"):
         el = hand.find(tag)
@@ -77,23 +82,24 @@ def build() -> pathlib.Path:
             hand.remove(el)
 
     # Re-root at the palm: the forearm (3 kg) and the wrist gimbal are replaced by the FR3 wrist.
-    palm = next(b for b in hand.find("worldbody").iter("body") if b.get("name") == "rh_palm")
+    palm = next(b for b in hand.find("worldbody").iter("body") if b.get("name") == f"{p}palm")
     palm.set("pos", "0 0 0")
     palm.attrib.pop("quat", None)
     for j in palm.findall("joint"):  # the palm's own wrist hinge (rh_WRJ1) is replaced by the flange
         palm.remove(j)
-    rename(hand, {**BODIES, **_JOINTS}, prefix="shadow_")
+    names = {p + k[len("rh_"):]: v for k, v in {**BODIES, **_JOINTS}.items()}
+    rename(hand, names, prefix="shadow_")
 
     actuators = []
     for a in hand.find("actuator"):
         if not isinstance(a.tag, str):
             continue
         joint = a.get("joint")
-        if joint in ("rh_WRJ1", "rh_WRJ2"):
+        if joint in (f"{p}WRJ1", f"{p}WRJ2"):
             continue
         c = copy.deepcopy(a)
         if a.get("tendon") is not None:  # one tendon per finger (J2 + J1): drive J2, J1 follows
-            finger = a.get("tendon")[len("rh_"):-len("J0")].lower()
+            finger = a.get("tendon")[len(p):-len("J0")].lower()
             c.attrib.pop("tendon")
             c.set("joint", f"{finger}_j2")
             c.set("name", f"{finger}_j2_actuator")
@@ -112,7 +118,7 @@ def build() -> pathlib.Path:
     contacts = [(e.get("body1"), e.get("body2")) for e in hand.find("contact")
                 if isinstance(e.tag, str) and {e.get("body1"), e.get("body2")} <= bodies]
     return write_model(
-        "shadow",
+        "shadow" if side == "right" else "shadow_left",
         palm,
         hand_defaults(hand),
         hand_assets(hand, "shadow_hand", meshdir),
@@ -121,8 +127,9 @@ def build() -> pathlib.Path:
         contacts=contacts,
         extra_excludes=(("fr3_link7", "hand_palm"), ("fr3_link6", "hand_palm")),
         n_hand_joints=22,
-        hand_childclass="shadow_right_hand",
-        comment="FR3 + Shadow Hand (assets/robots/shadow_hand from mujoco_menagerie, Apache 2.0).",
+        hand_childclass=f"shadow_{side}_hand",
+        comment=f"FR3 + Shadow Hand{"" if side == "right" else ", left"} (assets/robots/shadow_hand from mujoco_menagerie, Apache 2.0).",
+        directory="franka_fr3_shadow",
     )
 
 
@@ -130,4 +137,9 @@ def build() -> pathlib.Path:
 
 
 if __name__ == "__main__":
-    print(build())
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--side", choices=("right", "left", "both"), default="right")
+    for side in (("right", "left") if ap.parse_args().side == "both" else (ap.parse_args().side,)):
+        print(build(side))

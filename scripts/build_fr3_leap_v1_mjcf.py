@@ -24,6 +24,13 @@ Conversion:
   root frame, with +x out of the palm (the model's -z), +z along the fingers (the model's +x) and +y across the
   fingers (the model's +y).
 
+* **Left hand.** ``--side left`` builds ``franka_fr3_leap_v1/fr3_leap_v1_left.xml`` from ``left_hand.xml``.
+  Upstream's left model is its own export, not a mirror of the right one's frames; its palm frame is placed by
+  the same rule (centre of the finger bases, the same axes) and its back face measured on the compiled model
+  (its geometry within 35 mm of the flange axis ends 43.2 mm behind the palm frame, as on the right model). The
+  right model's :data:`PALM_BACK` (78.3 mm) leaves a 35 mm gap between the adapter and the palm; it is kept so the
+  existing right model (and the data collected with it) is unchanged.
+
 Run from the repository root:  python scripts/build_fr3_leap_v1_mjcf.py
 """
 
@@ -48,8 +55,15 @@ X_PALM, Y_PALM, Z_PALM = np.array([0.0, 0.0, -1.0]), np.array([0.0, 1.0, 0.0]), 
 PALM_BACK = 0.0783
 
 
-def build() -> pathlib.Path:
-    hand = ET.parse(ROBOTS / "leap_hand" / "right_hand.xml").getroot()
+#: The left model (upstream's own export, not a mirror of the right one's frames): the centre of its three finger
+#: bases and its palm's back face, measured the same way; the palm axes in its root frame are the right model's.
+LEFT_PALM_ORIGIN = np.array([-0.0825, -0.0403, 0.0078])
+LEFT_PALM_BACK = 0.0432
+
+
+def build(side: str = "right") -> pathlib.Path:
+    origin, back = (PALM_ORIGIN, PALM_BACK) if side == "right" else (LEFT_PALM_ORIGIN, LEFT_PALM_BACK)
+    hand = ET.parse(ROBOTS / "leap_hand" / f"{side}_hand.xml").getroot()
     meshdir = hand.find("compiler").get("meshdir", "")
     sensor = hand.find("sensor")
     if sensor is not None:
@@ -57,14 +71,14 @@ def build() -> pathlib.Path:
     actuators = [a for a in hand.find("actuator") if isinstance(a.tag, str)]
     rename(hand, {"palm": "leap_palm"}, prefix="leap1_")
     root = hand.find("worldbody").find("body")
-    root.append(palm_frame(PALM_ORIGIN, X_PALM, Y_PALM, Z_PALM))
-    set_pose(root, mount_transform(X_PALM, Y_PALM, Z_PALM, PALM_ORIGIN - PALM_BACK * X_PALM))
+    root.append(palm_frame(origin, X_PALM, Y_PALM, Z_PALM))
+    set_pose(root, mount_transform(X_PALM, Y_PALM, Z_PALM, origin - back * X_PALM))
 
     bodies = {b.get("name") for b in root.iter("body")}
     contacts = [(e.get("body1"), e.get("body2")) for e in hand.find("contact")
                 if isinstance(e.tag, str) and {e.get("body1"), e.get("body2")} <= bodies]
     return write_model(
-        "leap_v1",
+        "leap_v1" if side == "right" else "leap_v1_left",
         root,
         hand_defaults(hand),
         hand_assets(hand, "leap_hand", meshdir),
@@ -72,9 +86,16 @@ def build() -> pathlib.Path:
         contacts=contacts,
         extra_excludes=(("fr3_link7", "leap_palm"), ("fr3_link6", "leap_palm")),
         n_hand_joints=16,
-        comment="FR3 + LEAP Hand v1 (assets/robots/leap_hand from mujoco_menagerie, MIT).",
+        comment=f"FR3 + LEAP Hand v1{"" if side == "right" else ", left"} (assets/robots/leap_hand from mujoco_menagerie, MIT).",
+        directory="franka_fr3_leap_v1",
     )
 
 
 if __name__ == "__main__":
-    print(build())
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--side", choices=("right", "left", "both"), default="right")
+    side_ = ap.parse_args().side
+    for side in (("right", "left") if side_ == "both" else (side_,)):
+        print(build(side))

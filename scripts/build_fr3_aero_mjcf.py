@@ -29,6 +29,9 @@ Conversion:
   mount's frame, with +x out of the palm (the model's +z, where the fingers curl to), +z along the fingers (the
   model's +x) and +y toward the thumb (the model's -y).
 
+``--side left`` builds ``franka_fr3_aero/fr3_aero_left.xml`` from ``left_hand.xml`` (upstream's mirror of the right
+model): the same names (``left_`` dropped), the palm frame mirrored with it.
+
 Run from the repository root:  python scripts/build_fr3_aero_mjcf.py
 """
 
@@ -71,8 +74,17 @@ KP = {"mcp_flex": 2.0, "pip": 1.5, "thumb_cmc_abd": 1.0, "thumb_cmc_flex": 1.5, 
 FORCE = 2.0
 
 
-def build() -> pathlib.Path:
-    hand = ET.parse(ROBOTS / "tetheria_aero_hand_open" / "right_hand.xml").getroot()
+def _side_names(side: str) -> dict:
+    """:data:`NAMES` for ``side`` (the left model's names start with ``left_``)."""
+    return {(f"{side}_" + k[len("right_"):] if k.startswith("right_") else k): v for k, v in NAMES.items()}
+
+
+def build(side: str = "right") -> pathlib.Path:
+    names = _side_names(side)
+    # The left model is upstream's mirror of the right one across the root's xz plane: the palm frame's origin
+    # mirrors (y -> -y); its +x (out of the palm) and +z (along the fingers) stay, so +y points away from the thumb.
+    origin = PALM_ORIGIN * (np.array([1.0, -1.0, 1.0]) if side == "left" else 1.0)
+    hand = ET.parse(ROBOTS / "tetheria_aero_hand_open" / f"{side}_hand.xml").getroot()
     meshdir = hand.find("compiler").get("meshdir", "")
     for tag in ("tendon", "sensor", "custom"):
         el = hand.find(tag)
@@ -80,13 +92,13 @@ def build() -> pathlib.Path:
             hand.remove(el)
     hand.remove(hand.find("actuator"))
     actuators = [ET.Element("position", name=f"{j}_actuator", joint=j, kp=f"{_kp(j):g}", kv="0.05",
-                            ctrlrange=f"0 {_range(hand, j):g}", forcerange=f"-{FORCE:g} {FORCE:g}")
+                            ctrlrange=f"0 {_range(hand, j, names):g}", forcerange=f"-{FORCE:g} {FORCE:g}")
                  for j in HAND_JOINTS]
-    rename(hand, NAMES, prefix="aero_")
+    rename(hand, names, prefix="aero_")
     root = hand.find("worldbody").find("body")
     root.set("name", "aero_hand")
-    root.append(palm_frame(PALM_ORIGIN, X_PALM, Y_PALM, Z_PALM))
-    set_pose(root, mount_transform(X_PALM, Y_PALM, Z_PALM, PALM_ORIGIN - PALM_BACK * X_PALM))
+    root.append(palm_frame(origin, X_PALM, Y_PALM, Z_PALM))
+    set_pose(root, mount_transform(X_PALM, Y_PALM, Z_PALM, origin - PALM_BACK * X_PALM))
 
     bodies = {b.get("name") for b in root.iter("body")}
     contacts = [(e.get("body1"), e.get("body2")) for e in hand.find("contact")
@@ -94,7 +106,7 @@ def build() -> pathlib.Path:
     equality = [ET.Element("joint", joint1=dep, joint2=drv, polycoef=f"0 {m:g} {o:g} 0 0", solref="0.005 1")
                 for dep, (drv, m, o) in COUPLINGS.items()]
     return write_model(
-        "aero",
+        "aero" if side == "right" else "aero_left",
         root,
         hand_defaults(hand),
         hand_assets(hand, "tetheria_aero_hand_open", meshdir),
@@ -104,7 +116,8 @@ def build() -> pathlib.Path:
         extra_excludes=(("fr3_link7", "aero_hand"), ("fr3_link6", "aero_hand")),
         n_hand_joints=16,
         hand_childclass="aero_tetheria_rh",
-        comment="FR3 + Tetheria Aero Hand Open (assets/robots/tetheria_aero_hand_open from mujoco_menagerie, Apache 2.0).",
+        comment=f"FR3 + Tetheria Aero Hand Open{"" if side == "right" else ", left"} (assets/robots/tetheria_aero_hand_open from mujoco_menagerie, Apache 2.0).",
+        directory="franka_fr3_aero",
     )
 
 
@@ -113,9 +126,9 @@ def _kp(joint: str) -> float:
     return KP[joint] if joint in KP else KP[joint.split("_", 1)[1]]
 
 
-def _range(hand: ET.Element, joint: str) -> float:
+def _range(hand: ET.Element, joint: str, names: dict = NAMES) -> float:
     """The joint's upper limit, read from the (not yet renamed) model."""
-    upstream = {new: old for old, new in NAMES.items()}[joint]
+    upstream = {new: old for old, new in names.items()}[joint]
     for j in hand.iter("joint"):
         if j.get("name") == upstream:
             return float(j.get("range").split()[1])
@@ -123,4 +136,10 @@ def _range(hand: ET.Element, joint: str) -> float:
 
 
 if __name__ == "__main__":
-    print(build())
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--side", choices=("right", "left", "both"), default="right")
+    side_ = ap.parse_args().side
+    for side in (("right", "left") if side_ == "both" else (side_,)):
+        print(build(side))
