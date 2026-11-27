@@ -72,18 +72,24 @@ class CombinedController(EntityController[gs_entities.RigidEntity, dict, dict]):
             cfg_applied.update(cfg)
             self._sub_controllers[name] = ctrl_class(world=world, entity=entity, **cfg_applied)
 
-        # Action space: nested DictSpace {name: sub_ctrl.action_space}
+        observation_space, action_space = self._nested_spaces(world, self._sub_controllers)
+        super().__init__(world, entity, observation_space, action_space)
+
+    @staticmethod
+    def _nested_spaces(world: GenesisWorld, sub_controllers: Dict[str, EntityController]):
+        """``(observation_space, action_space)``: nested :class:`DictSpace` s ``{name: sub-controller's space}``.
+
+        Only the sub-controllers that expose an observation space are in the observation space, which is ``None``
+        when none does.
+        """
         action_space = DictSpace(
             PyTorchComputeBackend,
-            {name: ctrl.action_space for name, ctrl in self._sub_controllers.items()},
+            {name: ctrl.action_space for name, ctrl in sub_controllers.items()},
             device=world.device,
         )
-
-        # Observation space: nested DictSpace {name: sub_ctrl.observation_space}
-        # Only include sub-controllers that expose an observation_space
         obs_spaces = {
             name: ctrl.observation_space
-            for name, ctrl in self._sub_controllers.items()
+            for name, ctrl in sub_controllers.items()
             if ctrl.observation_space is not None
         }
         observation_space = (
@@ -91,8 +97,7 @@ class CombinedController(EntityController[gs_entities.RigidEntity, dict, dict]):
             if obs_spaces
             else None
         )
-
-        super().__init__(world, entity, observation_space, action_space)
+        return observation_space, action_space
 
     # ------------------------------------------------------------------
     # Public rate-limit / velocity clipping accessors

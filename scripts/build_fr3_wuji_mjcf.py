@@ -23,18 +23,22 @@ bodies. Here they are collected under one root body (``wuji_hand``, the palm) so
 * **Palm frame.** A ``palm`` body at the centre of the four finger bases, ``(-6.6, -2.7, 85.0)`` mm in the root
   frame, with the model's own axes: +x out of the palm, +z along the fingers, +y toward the thumb.
 
-Run from the repository root:  python scripts/build_fr3_wuji_mjcf.py
+Also writes ``eef/wuji.xml``, the hand alone posed on the flange (:func:`_fr3_eef_mjcf.write_eef_model`).
+
+Run from the repository root:  python scripts/build_fr3_wuji_mjcf.py [--only merged|eef]
 """
 
 from __future__ import annotations
 
+import argparse
 import copy
 import pathlib
 import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from _fr3_eef_mjcf import ROBOTS, hand_assets, mount_transform, palm_frame, rename, set_pose, write_model
+from _fr3_eef_mjcf import (ROBOTS, hand_assets, mount_transform, palm_frame, rename, set_pose, write_eef_model,
+                           write_model)
 
 #: The model's finger number -> the finger it is (numbered from the thumb).
 FINGERS = (("finger1", "thumb"), ("finger2", "index"), ("finger3", "middle"), ("finger4", "ring"), ("finger5", "pinky"))
@@ -44,7 +48,8 @@ PALM_ORIGIN = np.array([-0.0066341, -0.0027121, 0.085042])
 PALM_BACK_X = -0.0178
 
 
-def build() -> pathlib.Path:
+def build(only: str | None = None) -> list[pathlib.Path]:
+    """Write the merged model and the mountable one (``only``: just ``"merged"`` or ``"eef"``)."""
     hand = ET.parse(ROBOTS / "wuji_hand" / "right.xml").getroot()
     rename(hand, {f"right_{old}": new for old, new in FINGERS}, prefix="wuji_")
     meshdir = hand.find("compiler").get("meshdir", "")
@@ -66,18 +71,24 @@ def build() -> pathlib.Path:
     for e in hand.find("default"):
         if isinstance(e.tag, str):
             default.append(copy.deepcopy(e))
-    return write_model(
-        "wuji",
-        root,
-        [default],
-        hand_assets(hand, "wuji_hand", meshdir),
-        [a for a in hand.find("actuator") if isinstance(a.tag, str)],
-        extra_excludes=(("fr3_link7", "wuji_hand"), ("fr3_link6", "wuji_hand")),
+    pieces = dict(
+        hand_root=root,
+        hand_defaults=[default],
+        assets=hand_assets(hand, "wuji_hand", meshdir),
+        actuators=[a for a in hand.find("actuator") if isinstance(a.tag, str)],
         n_hand_joints=20,
         hand_childclass="wuji",
         comment="FR3 + Wuji hand (assets/robots/wuji_hand, the hand of the Tianji robot).",
     )
-
+    out = []
+    if only in (None, "eef"):  # first: write_model below moves the root into the arm
+        out.append(write_eef_model("wuji", **pieces))
+    if only in (None, "merged"):
+        out.append(write_model("wuji", **pieces, extra_excludes=(("fr3_link7", "wuji_hand"), ("fr3_link6", "wuji_hand"))))
+    return out
 
 if __name__ == "__main__":
-    print(build())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--only", choices=("merged", "eef"))
+    for path in build(parser.parse_args().only):
+        print(path)

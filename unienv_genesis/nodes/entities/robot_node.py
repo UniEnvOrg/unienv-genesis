@@ -263,12 +263,15 @@ class RobotDescriptionNode(EntityNode[
                     envs_idx=env_idx,
                 )
 
-    def _reset_joint_position(self, joint_position, mask : Optional[torch.Tensor]):
-        """The keyframe's joint positions, plus ``reset_joint_position_noise`` per reset environment when set."""
-        if self.reset_joint_position_noise is None:
+    def _reset_joint_position(self, joint_position, mask : Optional[torch.Tensor], noise : Optional[Any] = None):
+        """The keyframe's joint positions, plus uniform noise per reset environment: ``noise`` (half-widths, in the
+        keyframe's order), by default ``reset_joint_position_noise``. No noise when both are ``None``."""
+        if noise is None:
+            noise = self.reset_joint_position_noise
+        if noise is None:
             return joint_position
         base = torch.as_tensor(joint_position, dtype=torch.float32).cpu()
-        half_width = torch.as_tensor(self.reset_joint_position_noise, dtype=torch.float32).cpu()
+        half_width = torch.as_tensor(noise, dtype=torch.float32).cpu()
         if self.world.is_batched:
             n = int(torch.as_tensor(mask).sum()) if mask is not None else int(self.world.batch_size)
             shape = (n, base.shape[-1])

@@ -13,9 +13,14 @@ from unienv_genesis.nodes.entities.entity_controllers import CONTROL_MODE_T
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
+from unienv_genesis_collection.robots.arms.franka_fr3 import (  # the FR3 arm's constants, kept importable from here
+    ARM_HOME_JOINT_POSITIONS,
+    DROID_FRANKA_ARM_IK_VEL_LIMIT,
+    DROID_FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS,
+    FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS,
+)
 
 # Default home joint positions for FR3 arm (7 DOF) + Franka Hand (2 DOF, fully open)
-ARM_HOME_JOINT_POSITIONS = torch.tensor([0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853])
 GRIPPER_HOME_JOINT_POSITIONS = torch.tensor([0.04, 0.04])
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, GRIPPER_HOME_JOINT_POSITIONS])
 
@@ -24,26 +29,6 @@ EE_LINK_NAME = "hand"
 
 # Finger link names for grasp contact detection
 FINGER_PAD_LINK_NAMES = ["left_finger", "right_finger"]
-
-# Max joint velocity used by the arm's IK controller (rad/s).  This
-# rate-limits the per-step IK joint-position targets.  Originally the DROID
-# real-robot teleop limit (0.2 rad/s —
-# Ref: https://github.com/droid-dataset/droid/blob/main/droid/robot_ik/robot_ik_solver.py#L10
-# ); raised to 0.4 rad/s for simulation, where the conservative teleop limit
-# made the arm too slow to track transport waypoints.
-DROID_FRANKA_ARM_IK_VEL_LIMIT = 0.4
-
-# Franka hardware per-joint velocity limits (rad/s) from franka_hardware.yaml.
-# Intentionally retained as hardware/reference documentation for future
-# controller/planner work, even though the active controller uses the DROID
-# IK velocity limit above; NOT wired into any active controller.
-FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS = torch.tensor([2.075, 2.075, 2.075, 2.075, 2.51, 2.51, 2.51])
-
-# Previous DROID_-prefixed name, intentionally retained alongside the
-# reference constant above as searchable hardware documentation. Prefer
-# ``FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS``; both names refer to the same
-# reference tensor and neither feeds the active controller.
-DROID_FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS = FRANKA_HARDWARE_ARM_JOINT_VEL_LIMITS
 
 
 # Default combined sub-controller configuration
