@@ -79,12 +79,12 @@ class FrankaFR3Assembly(RobotAssemblyNode):
 
     Args:
         world: GenesisWorld instance
-        eef: The end effector part, e.g. ``robots.hands.wuji.wuji_hand_part()``.
+        eef: The end effector part, e.g. ``robots.hands.wuji.part()`` or ``robots.hands.get_part("shadow", "left")``.
         name: The robot's name (the arm's entity; the end effector is ``f"{name}_{eef_name}"``).
         pos, quat: Base pose.
         eef_name: The end effector's part name.
-        **arm_controller_kwargs: Overrides of the arm's sub-controller config (by default ``target_link`` is the
-            end effector's ``"eef"`` frame).
+        **arm_controller_kwargs: Overrides of the arm's sub-controller config, over the end effector's
+            ``parent_overrides["arm"]`` (by default ``target_link`` is the end effector's ``"eef"`` frame).
     """
 
     def __init__(
@@ -97,6 +97,7 @@ class FrankaFR3Assembly(RobotAssemblyNode):
         eef_name: str = "hand",
         **arm_controller_kwargs,
     ):
+        arm_controller_kwargs = {**eef.parent_overrides.get("arm", {}), **arm_controller_kwargs}
         if "target_link" not in arm_controller_kwargs and "eef" in eef.frames:
             arm_controller_kwargs["target_link"] = PartLink.of_frame(eef_name, eef.frames["eef"])
         super().__init__(

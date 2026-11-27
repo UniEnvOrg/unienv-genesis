@@ -24,22 +24,18 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
-ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-_FINGER_JOINTS = ("MCP_FE", "MCP_AA", "PIP", "DIP")
-HAND_JOINT_NAMES = (
-    [f"thumb_{j}" for j in ("CMC_FE", "CMC_AA", "MCP_FE", "MCP_AA", "IP")]
-    + [f"{f}_{j}" for f in ("index", "middle", "ring") for j in _FINGER_JOINTS]
-    + ["pinky_CMC"] + [f"pinky_{j}" for j in _FINGER_JOINTS]
+from unienv_genesis_collection.robots.hands.sharpa import (  # the hand's description, kept importable from here
+    _FINGER_JOINTS,
+    HAND_JOINT_NAMES,
+    PALM_LINK_NAME,
+    FINGER_PAD_LINK_NAMES,
+    _KP,
+    HAND_KP,
+    HAND_KD,
+    HAND_HOME_JOINT_POSITIONS,
+    HAND_SUB_CONTROLLER,
 )
-PALM_LINK_NAME = "palm"
-FINGER_PAD_LINK_NAMES = tuple(f"{f}_{p}" for f in ("index", "middle", "ring", "pinky") for p in ("PP", "MP", "DP")) + ("thumb_PP", "thumb_DP")
-#: Position gains per joint type (N m / rad), the model's actuators'.
-_KP = {"CMC_FE": 6.95, "CMC_AA": 13.2, "MCP_FE": 4.76, "MCP_AA": 6.62, "IP": 0.9, "PIP": 0.9, "DIP": 0.9, "CMC": 1.38}
-HAND_KP = [_KP[name.split("_", 1)[1]] for name in HAND_JOINT_NAMES]
-HAND_KD = [0.05 if kp < 2.0 else 0.2 for kp in HAND_KP]
-HAND_HOME_JOINT_POSITIONS = torch.zeros(len(HAND_JOINT_NAMES))
+ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, HAND_HOME_JOINT_POSITIONS])
 
 _DEFAULT_SUB_CONTROLLERS = {
@@ -49,13 +45,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "hand": {
-        "controller_type": "joint_position",
-        "joint_names": HAND_JOINT_NAMES,
-        "Kp": HAND_KP,
-        "Kd": HAND_KD,
-        "is_grasping_fn": make_is_grasping(FINGER_PAD_LINK_NAMES),
-    },
+    "hand": HAND_SUB_CONTROLLER,
 }
 
 

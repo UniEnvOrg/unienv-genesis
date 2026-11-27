@@ -24,19 +24,17 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
-FINGERS = ("ff", "mf", "rf", "th")  # index, middle, ring, thumb
+from unienv_genesis_collection.robots.hands.allegro import (  # the hand's description, kept importable from here
+    FINGERS,
+    HAND_JOINT_NAMES,
+    PALM_LINK_NAME,
+    FINGER_PAD_LINK_NAMES,
+    HAND_KP,
+    HAND_KD,
+    HAND_HOME_JOINT_POSITIONS,
+    HAND_SUB_CONTROLLER,
+)
 ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-HAND_JOINT_NAMES = [f"{f}j{j}" for f in FINGERS for j in range(4)]
-PALM_LINK_NAME = "palm"
-#: Contact-capable finger links (the fingertip bodies have no joint, so their geoms belong to the distal links).
-FINGER_PAD_LINK_NAMES = tuple(f"{f}_{part}" for f in FINGERS for part in ("proximal", "medial", "distal"))
-#: Finger PD gains (the menagerie model's actuator kp = 1 is too weak to hold a grasp).
-HAND_KP = [3.0] * 16
-HAND_KD = [0.1] * 16
-#: Fingers straight, the thumb at its lowest (most opposed) base angle.
-HAND_HOME_JOINT_POSITIONS = torch.tensor([0.0] * 12 + [0.263, 0.0, 0.0, 0.0])
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, HAND_HOME_JOINT_POSITIONS])
 
 _DEFAULT_SUB_CONTROLLERS = {
@@ -46,13 +44,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "hand": {
-        "controller_type": "joint_position",
-        "joint_names": HAND_JOINT_NAMES,
-        "Kp": HAND_KP,
-        "Kd": HAND_KD,
-        "is_grasping_fn": make_is_grasping(FINGER_PAD_LINK_NAMES),
-    },
+    "hand": HAND_SUB_CONTROLLER,
 }
 
 

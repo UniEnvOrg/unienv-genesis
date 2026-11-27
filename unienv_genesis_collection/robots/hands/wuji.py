@@ -1,7 +1,8 @@
 """The Wuji five-finger hand (right hand) as an end effector.
 
-Mounted by the back of its palm, its palm facing out of the flange (``scripts/build_fr3_wuji_mjcf.py``, which writes
-both the merged ``franka_fr3_wuji/fr3_wuji.xml`` and the mountable ``eef/wuji.xml`` from ``wuji_hand/right.xml``).
+Mounted by the back of its palm, its palm facing out of the flange (``scripts/build_fr3_wuji_mjcf.py`` builds the
+merged ``franka_fr3_wuji/fr3_wuji.xml`` from ``wuji_hand/right.xml``; ``scripts/build_eef_mjcf.py`` cuts the hand
+out of it, ``eef/wuji.xml``).
 
 20 joints, each driven: per finger (thumb, index, middle, ring, pinky) joint1 (MCP flexion), joint2 (MCP abduction),
 joint3 (PIP), joint4 (DIP). No coupled joints. The source model drives every joint with a 0.5 N m / rad position
@@ -12,10 +13,8 @@ the model's per-joint ``forcerange`` in place as the torque limit.
 import torch
 
 from unienv_genesis.nodes.entities.robot_assembly_node import PartFrame, RobotPart
-from unienv_genesis.nodes.entities.robot_node import RobotKeyframe
-from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-from unienv_genesis_collection.robots.hands import mjcf_mount_pose
+from unienv_genesis_collection.robots.hands import eef_part
 
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 HAND_JOINT_NAMES = [f"{f}_joint{j}" for f in FINGERS for j in range(1, 5)]
@@ -39,16 +38,20 @@ HAND_SUB_CONTROLLER = {
 }
 
 
-def wuji_hand_part() -> RobotPart:
-    """The hand alone (``eef/wuji.xml``): sub-controller ``"hand"``, reset to :data:`HAND_HOME_JOINT_POSITIONS`,
-    frame ``"eef"`` (the palm frame: +x out of the palm, +z along the fingers)."""
-    path = get_asset_path("robots", "eef", "wuji.xml")
-    mount_pos, mount_quat = mjcf_mount_pose(path)
-    return RobotPart(
-        description_file=path,
-        sub_controllers={"hand": HAND_SUB_CONTROLLER},
-        keyframe=RobotKeyframe(joint_position=HAND_HOME_JOINT_POSITIONS, joint_names=HAND_JOINT_NAMES),
-        frames={"eef": PartFrame(PALM_LINK_NAME)},
-        mount_pos=mount_pos,
-        mount_quat=mount_quat,
+def part() -> RobotPart:
+    """The Wuji hand alone: ``eef/wuji.xml``.
+
+    Sub-controller ``"hand"``, reset to :data:`HAND_HOME_JOINT_POSITIONS`; frame ``"eef"`` (:data:`PALM_LINK_NAME`,
+    +x out of the palm, +z along the fingers) is what the arm's end-effector controller targets.
+    """
+    return eef_part(
+        "wuji",
+        {"hand": HAND_SUB_CONTROLLER},
+        home=HAND_HOME_JOINT_POSITIONS,
+        joint_names=HAND_JOINT_NAMES,
+        eef_frame=PartFrame(PALM_LINK_NAME),
     )
+
+
+#: The former name of :func:`part`.
+wuji_hand_part = part

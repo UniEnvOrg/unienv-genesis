@@ -24,20 +24,17 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
-FINGERS = ("index", "middle", "ring", "pinky")
+from unienv_genesis_collection.robots.hands.leap import (  # the hand's description, kept importable from here
+    FINGERS,
+    HAND_JOINT_NAMES,
+    PALM_LINK_NAME,
+    FINGER_PAD_LINK_NAMES,
+    HAND_KP,
+    HAND_KD,
+    HAND_HOME_JOINT_POSITIONS,
+    HAND_SUB_CONTROLLER,
+)
 ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-#: The driven hand joints (each finger's dip follows its pip).
-HAND_JOINT_NAMES = [f"{f}_{j}" for f in FINGERS for j in ("mcpf", "mcps", "pip")] + [
-    "thumb_mcpf", "thumb_mcps", "thumb_ip", "palm_4_finger", "palm_thumb"]
-PALM_LINK_NAME = "palm"
-FINGER_PAD_LINK_NAMES = tuple(f"{f}_{p}" for f in (*FINGERS, "thumb") for p in ("proximal", "middle", "distal")
-                              if not (f == "thumb" and p == "middle"))
-#: Finger PD gains (N m / rad; the motors give ~0.5 N m, the palm folds 1-1.4 N m).
-HAND_KP = [3.0] * 15 + [5.0, 5.0]
-HAND_KD = [0.1] * 17
-HAND_HOME_JOINT_POSITIONS = torch.zeros(len(HAND_JOINT_NAMES))
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, HAND_HOME_JOINT_POSITIONS])
 
 _DEFAULT_SUB_CONTROLLERS = {
@@ -47,13 +44,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "hand": {
-        "controller_type": "joint_position",
-        "joint_names": HAND_JOINT_NAMES,
-        "Kp": HAND_KP,
-        "Kd": HAND_KD,
-        "is_grasping_fn": make_is_grasping(FINGER_PAD_LINK_NAMES),
-    },
+    "hand": HAND_SUB_CONTROLLER,
 }
 
 

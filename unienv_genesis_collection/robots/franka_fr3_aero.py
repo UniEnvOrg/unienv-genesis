@@ -30,23 +30,20 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
-FINGERS = ("index", "middle", "ring", "pinky")
+from unienv_genesis_collection.robots.hands.aero import (  # the hand's description, kept importable from here
+    FINGERS,
+    HAND_JOINT_NAMES,
+    PALM_LINK_NAME,
+    FINGER_PAD_LINK_NAMES,
+    _KP,
+    HAND_KP,
+    HAND_KD,
+    HAND_HOME_JOINT_POSITIONS,
+    COUPLINGS,
+    HAND_SUB_CONTROLLER,
+)
 ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-#: The driven joints (each finger's DIP and the thumb's IP follow their driver).
-HAND_JOINT_NAMES = ([f"{f}_{j}" for f in FINGERS for j in ("mcp_flex", "pip")]
-                    + ["thumb_cmc_abd", "thumb_cmc_flex", "thumb_mcp"])
-PALM_LINK_NAME = "palm"
-FINGER_PAD_LINK_NAMES = tuple(f"{f}_distal" for f in FINGERS) + ("thumb_distal",)
-#: Position gains (N m / rad) of a light (0.45 kg) printed hand, and the torque limit the build script sets.
-_KP = {"mcp_flex": 2.0, "pip": 1.5, "thumb_cmc_abd": 1.0, "thumb_cmc_flex": 1.5, "thumb_mcp": 1.5}
-HAND_KP = [_KP[n] if n in _KP else _KP[n.split("_", 1)[1]] for n in HAND_JOINT_NAMES]
-HAND_KD = [0.05] * len(HAND_JOINT_NAMES)
-HAND_HOME_JOINT_POSITIONS = torch.zeros(len(HAND_JOINT_NAMES))
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, HAND_HOME_JOINT_POSITIONS])
-#: Joints that follow another through an equality constraint: {dependent: (driver, multiplier, offset)}.
-COUPLINGS = {**{f"{f}_dip": (f"{f}_pip", 1.0, 0.0) for f in FINGERS}, "thumb_ip": ("thumb_mcp", 1.0, 0.0)}
 
 _DEFAULT_SUB_CONTROLLERS = {
     "arm": {
@@ -55,13 +52,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "hand": {
-        "controller_type": "joint_position",
-        "joint_names": HAND_JOINT_NAMES,
-        "Kp": HAND_KP,
-        "Kd": HAND_KD,
-        "is_grasping_fn": make_is_grasping(FINGER_PAD_LINK_NAMES),
-    },
+    "hand": HAND_SUB_CONTROLLER,
 }
 
 

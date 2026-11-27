@@ -27,17 +27,17 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
+from unienv_genesis_collection.robots.hands.aloha import (  # the gripper's description, kept importable from here
+    PALM_LINK_NAME,
+    GRIPPER_DRIVER_NAMES,
+    GRIPPER_PAD_LINK_NAMES,
+    COUPLINGS,
+    OPEN,
+    CLOSED,
+    GRIPPER_HOME_JOINT_POSITIONS,
+    GRIPPER_SUB_CONTROLLER,
+)
 ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-PALM_LINK_NAME = "palm"
-GRIPPER_DRIVER_NAMES = ["left_finger_joint", "right_finger_joint"]
-GRIPPER_PAD_LINK_NAMES = ["left_finger", "right_finger"]
-#: The fingers are coupled by a joint equality: {dependent: (driver, multiplier, offset)}.
-COUPLINGS = {"right_finger_joint": ("left_finger_joint", 1.0, 0.0)}
-#: Control travel of one finger (the real robot's software limits): 2 mm closed, 37 mm fully open.
-OPEN, CLOSED = 0.037, 0.002
-GRIPPER_HOME_JOINT_POSITIONS = torch.tensor([OPEN, OPEN])
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, GRIPPER_HOME_JOINT_POSITIONS])
 
 _DEFAULT_SUB_CONTROLLERS = {
@@ -47,27 +47,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "gripper": {
-        "controller_type": "mimic_joint_position",
-        "joint_names": GRIPPER_DRIVER_NAMES,
-        # the model's own gains for the finger slides (kp / kv of the ViperX gripper)
-        "Kp": 2000.0,
-        "Kd": 124.0,
-        # -1 = fully open (37 mm per finger), +1 = fully closed (2 mm)
-        "multiplier": (CLOSED - OPEN) / 2,
-        "shift": (CLOSED + OPEN) / 2,
-        "control_low": -1,
-        "control_high": 1,
-        "is_grasping_fn": make_is_grasping(GRIPPER_PAD_LINK_NAMES),
-        "approach_direction": [0.0, 0.0, 1.0],
-        "open_direction": [0.0, 1.0, 0.0],
-        "gripper_width": 2 * OPEN,
-        "gripper_depth": 0.04,
-        "gripper_open_action": -1.0,
-        "gripper_close_action": 1.0,
-        # The palm frame is the grasp centre between the finger pads (the tip frame itself).
-        "eef_tip_offset": [0.0, 0.0, 0.0],
-    },
+    "gripper": GRIPPER_SUB_CONTROLLER,
 }
 
 

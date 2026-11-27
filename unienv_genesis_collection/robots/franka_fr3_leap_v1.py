@@ -27,20 +27,19 @@ from unienv_genesis.nodes.entities.robot_node import RobotDescriptionNode, Robot
 from unienv_genesis.options.attach_option import LinkAttachment
 from unienv_genesis_collection.asset_path import get_asset_path
 from unienv_genesis_collection.robots.franka_fr3_hand import ARM_HOME_JOINT_POSITIONS, DROID_FRANKA_ARM_IK_VEL_LIMIT
-from unienv_genesis_collection.robots.grasp_utils import make_is_grasping
-
-FINGERS = ("if", "mf", "rf")
+from unienv_genesis_collection.robots.hands.leap_v1 import (  # the hand's description, kept importable from here
+    FINGERS,
+    HAND_JOINT_NAMES,
+    PALM_LINK_NAME,
+    FINGER_PAD_LINK_NAMES,
+    HAND_KP,
+    HAND_KD,
+    HAND_HOME_JOINT_POSITIONS,
+    COUPLINGS,
+    HAND_SUB_CONTROLLER,
+)
 ARM_JOINT_NAMES = [f"fr3_joint{i}" for i in range(1, 8)]
-HAND_JOINT_NAMES = ([f"{f}_{j}" for f in FINGERS for j in ("mcp", "rot", "pip", "dip")]
-                    + ["th_cmc", "th_axl", "th_mcp", "th_ipl"])
-PALM_LINK_NAME = "palm"
-FINGER_PAD_LINK_NAMES = tuple(f"{f}_ds" for f in FINGERS) + ("th_ds",)
-HAND_KP = [3.0] * len(HAND_JOINT_NAMES)  # the model's own position gain
-HAND_KD = [0.1] * len(HAND_JOINT_NAMES)
-HAND_HOME_JOINT_POSITIONS = torch.zeros(len(HAND_JOINT_NAMES))
 HOME_JOINT_POSITIONS = torch.cat([ARM_HOME_JOINT_POSITIONS, HAND_HOME_JOINT_POSITIONS])
-#: Joints that follow another through an equality constraint: {dependent: (driver, multiplier, offset)}.
-COUPLINGS = {}
 
 _DEFAULT_SUB_CONTROLLERS = {
     "arm": {
@@ -49,13 +48,7 @@ _DEFAULT_SUB_CONTROLLERS = {
         "target_link": LinkAttachment(link_name=PALM_LINK_NAME),
         "max_joint_pos_vel": DROID_FRANKA_ARM_IK_VEL_LIMIT,
     },
-    "hand": {
-        "controller_type": "joint_position",
-        "joint_names": HAND_JOINT_NAMES,
-        "Kp": HAND_KP,
-        "Kd": HAND_KD,
-        "is_grasping_fn": make_is_grasping(FINGER_PAD_LINK_NAMES),
-    },
+    "hand": HAND_SUB_CONTROLLER,
 }
 
 

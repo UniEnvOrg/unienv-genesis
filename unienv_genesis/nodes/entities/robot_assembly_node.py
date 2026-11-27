@@ -94,6 +94,9 @@ class RobotPart:
         morph_kwargs: extra keyword arguments of the part's Genesis morph.
         mount_pos, mount_quat: the pose of the part's base link in the frame it is mounted on (the parent's
             ``parent_frame``), e.g. a hand's pose on the flange. Identity by default.
+        parent_overrides: ``{sub-controller name: {option: value}}`` this part asks of the sub-controllers of the
+            part it is mounted on, e.g. the arm gains a gripper was tuned with. Applied by robot classes that
+            assemble a given arm with any end effector (``FrankaFR3Assembly``), under their explicit options.
     """
     description_file: Union[str, os.PathLike]
     sub_controllers: Dict[str, Dict[str, Any]]
@@ -102,6 +105,7 @@ class RobotPart:
     morph_kwargs: Dict[str, Any] = field(default_factory=dict)
     mount_pos: Optional[Sequence[float]] = None
     mount_quat: Optional[Sequence[float]] = None
+    parent_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
